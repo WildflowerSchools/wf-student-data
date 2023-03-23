@@ -52,6 +52,7 @@ class PostgresClient:
         table_name,
         index_columns=None
     ):
+        ## TODO: Should we add option of using existing connection?
         # Read data from student database
         sql_object = psycopg2.sql.SQL("SELECT * FROM {schema_name}.{table_name}").format(
             schema_name=psycopg2.sql.Identifier(schema_name),
@@ -86,6 +87,7 @@ class PostgresClient:
         progress_bar=False,
         notebook=False
     ):
+        ## TODO: Should we add option of *not* using existing connection (create connection within method)?
         dataframe_noindex = dataframe.reset_index()
         column_names = dataframe_noindex.columns.tolist()
         # Build SQL string which we will use to insert each row of data
