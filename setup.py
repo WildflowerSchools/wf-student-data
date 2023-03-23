@@ -12,6 +12,7 @@ def get_version():
 
 # Dependencies (format is 'PYPI_PACKAGE_NAME[>]=VERSION_NUMBER')
 BASE_DEPENDENCIES = [
+    'psycopg2-binary >= 2.9'
 ]
 
 # TEST_DEPENDENCIES = [
