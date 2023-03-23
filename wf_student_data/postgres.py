@@ -1,5 +1,6 @@
 import pandas as pd
 import psycopg2
+import tqdm
 import os
 
 class PostgresClient:
@@ -68,4 +69,32 @@ class PostgresClient:
                 .sort_index()
             )
         return dataframe
+
+    def insert_dataframe(
+        self,
+        dataframe,
+        schema_name,
+        table_name,
+        conn,
+        progress_bar=False,
+        notebook=False
+    ):
+        dataframe_noindex = dataframe.reset_index()
+        column_names = dataframe_noindex.columns.tolist()
+        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({field_names}) VALUES ({value_placeholders})").format(
+            schema_name=psycopg2.sql.Identifier(schema_name),
+            table_name=psycopg2.sql.Identifier(table_name),
+            field_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in column_names]),
+            value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(column_names))
+        )
+        if progress_bar:
+            if notebook:
+                dataframe_iterator = tqdm.notebook.tqdm(dataframe_noindex.iterrows(), total=len(dataframe_noindex))
+            else:
+                dataframe_iterator = tqdm.tqdm(dataframe_noindex.iterrows(), total=len(dataframe_noindex))
+        else:
+            dataframe_iterator = dataframe_noindex.iterrows()
+        with conn.cursor() as cur:
+            for index, row in dataframe_iterator:
+                cur.execute(sql_object, row.tolist())
 
