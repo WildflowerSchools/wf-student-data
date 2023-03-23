@@ -1,3 +1,4 @@
+import pandas as pd
 import psycopg2
 import os
 
@@ -40,6 +41,31 @@ class PostgresClient:
     def connect(self):
         conn = psycopg2.connect(**self.connect_kwargs)
         return conn
-        
 
+    def fetch_dataframe(
+        self,
+        schema_name,
+        table_name,
+        index_columns=None
+    ):
+        sql_object = psycopg2.sql.SQL("SELECT * FROM {schema_name}.{table_name}").format(
+            schema_name=psycopg2.sql.Identifier(schema_name),
+            table_name=psycopg2.sql.Identifier(table_name)
+        )
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql_object)
+                column_names = [descriptor.name for descriptor in cur.description]
+                data_list = cur.fetchall()    
+        dataframe = pd.DataFrame(
+            data_list,
+            columns=column_names
+        )
+        if index_columns is not None:
+            dataframe = (
+                dataframe
+                .set_index(index_columns)
+                .sort_index()
+            )
+        return dataframe
 
