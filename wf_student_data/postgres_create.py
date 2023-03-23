@@ -1,5 +1,8 @@
 import psycopg2
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 SCHEMA="""
 CREATE SCHEMA tc;
@@ -102,6 +105,7 @@ def create_student_database(
     host=None,
     port=None
 ):
+    # Read connection specifications from environment variables if not explicitly specified
     if default_dbname is None:
         default_dbname = os.getenv('POSTGRES_DEFAULT_DBNAME')
     if student_database_dbname is None:
@@ -114,6 +118,7 @@ def create_student_database(
         host = os.getenv('STUDENT_DATABASE_HOST')
     if port is None:
         port = os.getenv('STUDENT_DATABASE_PORT')
+    # Populate connection arguments, leaving out any not specified (so psycopg2 reverts to default)
     connect_kwargs = dict()
     if default_dbname is not None:
         connect_kwargs['dbname'] = default_dbname
@@ -125,15 +130,19 @@ def create_student_database(
         connect_kwargs['host'] = host
     if port is not None:
         connect_kwargs['port'] = port
+    # Connect to default database (because student database does not exist yet)
     conn = psycopg2.connect(**connect_kwargs)
     conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+    # Create student database
     cur = conn.cursor()
     sql_object = psycopg2.sql.SQL("CREATE DATABASE {student_database_dbname};").format(
         student_database_dbname=psycopg2.sql.Identifier(student_database_dbname)
     )
     cur.execute(sql_object)
     cur.close()
+    # Close connection to default database
     conn.close()
+    # Connect to student database and create schemas and tables
     connect_kwargs['dbname'] = student_database_dbname
     with psycopg2.connect(**connect_kwargs) as conn:
         with conn.cursor() as cur:
