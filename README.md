@@ -1,10 +1,10 @@
-# MODULE_NAME
+# wf_student_data
 
-SHORT_DESCRIPTION
+Tools for working with Wildflower Schools student-level data
 
 ## Installation
 
-`pip install PYPI_PACKAGE_NAME`
+`pip install wf-student-data`
 
 ## Task list
 * TBD

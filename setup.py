@@ -7,7 +7,7 @@ BASEDIR = os.path.dirname(os.path.abspath(__file__))
 VERSION_RE = re.compile(r'''__version__ = ['"]([0-9.]+)['"]''')
 
 def get_version():
-    init = open(os.path.join(BASEDIR, 'MODULE_NAME', '__init__.py')).read()
+    init = open(os.path.join(BASEDIR, 'wf_student_data', '__init__.py')).read()
     return VERSION_RE.search(init).group(1)
 
 # Dependencies (format is 'PYPI_PACKAGE_NAME[>]=VERSION_NUMBER')
@@ -27,16 +27,16 @@ BASE_DEPENDENCIES = [
 os.chdir(os.path.normpath(BASEDIR))
 
 setup(
-    name='PYPI_PACKAGE_NAME',
+    name='wf-student-data',
     packages=find_packages(),
     version=get_version(),
     include_package_data=True,
-    description='SHORT_DESCRIPTION',
+    description='Tools for working with Wildflower Schools student-level data',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    url='GITHUB_URL',
-    author='AUTHOR_FULL_NAME',
-    author_email='AUTHOR_EMAIL_ADDRESS',
+    url='https://github.com/WildflowerSchools/wf-student-data',
+    author='Theodore Quinn',
+    author_email='ted.quinn@wildflowerschools.org',
     install_requires=BASE_DEPENDENCIES,
     # tests_require=TEST_DEPENDENCIES,
     # extras_require = {
