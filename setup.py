@@ -14,6 +14,7 @@ def get_version():
 BASE_DEPENDENCIES = [
     'psycopg2-binary >= 2.9',
     'pandas >= 1.5',
+    'numpy >= 1.24',
     'tqdm >= 4'
 ]
 
