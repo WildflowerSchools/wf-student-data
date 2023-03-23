@@ -131,9 +131,11 @@ def create_student_database(
     if port is not None:
         connect_kwargs['port'] = port
     # Connect to default database (because student database does not exist yet)
+    logger.info('Connecting to default database with connection specifications {}'.format(connect_kwargs))
     conn = psycopg2.connect(**connect_kwargs)
     conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
     # Create student database
+    logger.info('Creating student database')
     cur = conn.cursor()
     sql_object = psycopg2.sql.SQL("CREATE DATABASE {student_database_dbname};").format(
         student_database_dbname=psycopg2.sql.Identifier(student_database_dbname)
@@ -144,6 +146,8 @@ def create_student_database(
     conn.close()
     # Connect to student database and create schemas and tables
     connect_kwargs['dbname'] = student_database_dbname
+    logger.info('Connecting to student database with connection specifications {}'.format(connect_kwargs))
     with psycopg2.connect(**connect_kwargs) as conn:
+        logger.info('Creating schemas and tables within student database')
         with conn.cursor() as cur:
             cur.execute(SCHEMA)

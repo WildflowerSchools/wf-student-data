@@ -2,6 +2,9 @@ import pandas as pd
 import psycopg2
 import tqdm
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PostgresClient:
     def __init__(
@@ -43,6 +46,7 @@ class PostgresClient:
     
     def connect(self):
         # Connect to student database
+        logger.info('Connecting to student database with connection specifications {}'.format(self.connect_kwargs))
         conn = psycopg2.connect(**self.connect_kwargs)
         return conn
 
@@ -54,6 +58,10 @@ class PostgresClient:
     ):
         ## TODO: Should we add option of using existing connection?
         # Read data from student database
+        logger.info('Fetching \'{}\' table from \'{}\' schema'.format(
+           table_name,
+           schema_name 
+        ))
         sql_object = psycopg2.sql.SQL("SELECT * FROM {schema_name}.{table_name}").format(
             schema_name=psycopg2.sql.Identifier(schema_name),
             table_name=psycopg2.sql.Identifier(table_name)
@@ -64,6 +72,7 @@ class PostgresClient:
                 column_names = [descriptor.name for descriptor in cur.description]
                 data_list = cur.fetchall()
         # Convert to dataframe
+        logger.info('Converting to Pandas dataframe')
         dataframe = pd.DataFrame(
             data_list,
             columns=column_names
@@ -107,6 +116,10 @@ class PostgresClient:
             dataframe_iterator = dataframe_noindex.iterrows()
         # Iterate through dataframe, inserting each row
         ## TODO: Implement bulk insert?
+        logger.info('Inserting data into \'{}\' table in \'{}\' schema'.format(
+           table_name,
+           schema_name 
+        ))
         with conn.cursor() as cur:
             for index, row in dataframe_iterator:
                 cur.execute(sql_object, row.tolist())
