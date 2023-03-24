@@ -39,6 +39,77 @@ class TransparentClassroomClient:
             )
             self.api_token = json_output['api_token']
 
+    def fetch_classroom_child_data(
+        self,
+        session_ids=None,
+        progress_bar=False,
+        notebook=False
+    ):
+        if session_ids is None:
+            session_ids = self.fetch_session_ids(
+                progress_bar=progress_bar,
+                notebook=notebook
+            )
+        if progress_bar:
+            if notebook:
+                session_id_iterator = tqdm.notebook.tqdm(session_ids)
+            else:
+                session_id_iterator = tqdm.tqdm(session_ids)
+        else:
+            session_id_iterator = session_ids
+        classrooms_children_dfs = list()
+        for school_id, session_id in session_id_iterator:
+            classrooms_children_session = self.fetch_classroom_child_data_session(
+                school_id=school_id,
+                session_id=session_id
+            )
+            classrooms_children_dfs.append(classrooms_children_session)
+        classrooms_children = (
+            pd.concat(classrooms_children_dfs)
+            .sort_index()
+        )
+        return classrooms_children
+
+    def fetch_classroom_child_data_session(
+        self,
+        school_id,
+        session_id        
+    ):
+        classrooms_children_session_list = self.request(
+            'children.json',
+            params={'session_id': session_id},
+            school_id=school_id
+        )
+        if len(classrooms_children_session_list) == 0:
+            return pd.DataFrame()
+        classrooms_children_session = (
+            pd.DataFrame(classrooms_children_session_list)
+            .assign(school_id=school_id)
+            .assign(session_id=session_id)
+            .rename(columns={
+                'id': 'child_id'
+            })
+            .reindex(columns=[
+                'school_id',
+                'session_id',
+                'classroom_ids',
+                'child_id'
+            ])
+            .dropna(subset=['classroom_ids'])
+            .explode('classroom_ids')
+            .rename(columns={
+                'classroom_ids': 'classroom_id'
+            })
+            .set_index([
+                'school_id',
+                'session_id',
+                'classroom_id',
+                'child_id'
+            ])
+            .sort_index()
+        )
+        return classrooms_children_session
+        
     def fetch_child_data(
         self,
         school_ids=None,
@@ -214,6 +285,18 @@ class TransparentClassroomClient:
         )
         return users_school
 
+    def fetch_session_ids(
+        progress_bar=False,
+        notebook=False
+    ):
+        sessions = self.fetch_session_data(
+            school_ids=None,
+            progress_bar=progress_bar,
+            notebook=notebook
+        )
+        session_ids = sessions.index.tolist()
+        return session_ids
+    
     def fetch_session_data(
         self,
         school_ids=None,
