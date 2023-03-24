@@ -53,14 +53,14 @@ class TransparentClassroomClient:
                 school_id_iterator = tqdm.tqdm(school_ids)
         else:
             school_id_iterator = school_ids
-        user_dfs = list()
+        users_dfs = list()
         for school_id in school_id_iterator:
             users_school = self.fetch_user_data_school(
                 school_id=school_id
             )
-            user_dfs.append(users_school)
+            users_dfs.append(users_school)
         users = (
-            pd.concat(user_dfs)
+            pd.concat(users_dfs)
             .sort_index()
         )
         return users
@@ -114,14 +114,14 @@ class TransparentClassroomClient:
                 school_id_iterator = tqdm.tqdm(school_ids)
         else:
             school_id_iterator = school_ids
-        session_dfs = list()
+        sessions_dfs = list()
         for school_id in school_id_iterator:
             sessions_school = self.fetch_session_data_school(
                 school_id=school_id
             )
-            session_dfs.append(sessions_school)
+            sessions_dfs.append(sessions_school)
         sessions = (
-            pd.concat(session_dfs)
+            pd.concat(sessions_dfs)
             .sort_index()
         )
         return sessions
@@ -179,14 +179,14 @@ class TransparentClassroomClient:
                 school_id_iterator = tqdm.tqdm(school_ids)
         else:
             school_id_iterator = school_ids
-        classroom_dfs = list()
+        classrooms_dfs = list()
         for school_id in school_id_iterator:
             classrooms_school = self.fetch_classroom_data_school(
                 school_id=school_id
             )
-            classroom_dfs.append(classrooms_school)
+            classrooms_dfs.append(classrooms_school)
         classrooms = (
-            pd.concat(classroom_dfs)
+            pd.concat(classrooms_dfs)
             .sort_index()
         )
         return classrooms
