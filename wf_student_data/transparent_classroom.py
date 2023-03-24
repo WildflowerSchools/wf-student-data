@@ -38,6 +38,67 @@ class TransparentClassroomClient:
             )
             self.api_token = json_output['api_token']
     
+    def fetch_user_data(
+        self,
+        school_ids=None,
+        progress_bar=False,
+        notebook=False
+    ):
+        if school_ids is None:
+            school_ids = self.fetch_school_ids()
+        if progress_bar:
+            if notebook:
+                school_id_iterator = tqdm.notebook.tqdm(school_ids)
+            else:
+                school_id_iterator = tqdm.tqdm(school_ids)
+        else:
+            school_id_iterator = school_ids
+        user_dfs = list()
+        for school_id in school_id_iterator:
+            users_school = self.fetch_user_data_school(
+                school_id=school_id
+            )
+            user_dfs.append(users_school)
+        users = (
+            pd.concat(user_dfs)
+            .sort_index()
+        )
+        return users
+
+    def fetch_user_data_school(
+        self,
+        school_id
+    ):
+        users_school_list = self.request(
+            'users.json',
+            params=None,
+            school_id=school_id
+        )
+        if len(users_school_list) == 0:
+            logging.warning('School {} has zero users'.format(school_id))
+            return pd.DataFrame()
+        users_school = (
+            pd.DataFrame(users_school_list)
+            .assign(school_id=school_id)
+            .rename(columns={'id': 'user_id'})
+            .reindex(columns=[
+                'school_id',
+                'user_id',
+                'first_name',
+                'last_name',
+                'email',
+                'roles',
+                'inactive',
+                'type'
+            ])
+            .set_index([
+                'school_id',
+                'user_id'
+            ])
+            .sort_index()
+        )
+        return users_school
+
     def fetch_session_data(
         self,
         school_ids=None,
