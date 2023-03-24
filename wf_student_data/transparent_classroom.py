@@ -1,3 +1,4 @@
+import wf_student_data.utils as utils
 import requests
 import pandas as pd
 import tqdm
@@ -37,6 +38,71 @@ class TransparentClassroomClient:
             )
             self.api_token = json_output['api_token']
     
+    def fetch_session_data(
+        self,
+        school_ids=None,
+        progress_bar=False,
+        notebook=False
+    ):
+        if school_ids is None:
+            school_ids = self.fetch_school_ids()
+        if progress_bar:
+            if notebook:
+                school_id_iterator = tqdm.notebook.tqdm(school_ids)
+            else:
+                school_id_iterator = tqdm.tqdm(school_ids)
+        else:
+            school_id_iterator = school_ids
+        session_dfs = list()
+        for school_id in school_id_iterator:
+            sessions_school = self.fetch_session_data_school(
+                school_id=school_id
+            )
+            session_dfs.append(sessions_school)
+        sessions = (
+            pd.concat(session_dfs)
+            .sort_index()
+        )
+        return sessions
+
+    def fetch_session_data_school(
+        self,
+        school_id
+    ):
+        sessions_school_list = self.request(
+            'sessions.json',
+            params=None,
+            school_id=school_id
+        )
+        if len(sessions_school_list) == 0:
+            logging.warning('School {} has zero sessions'.format(
+                school_id
+            ))
+            return pd.DataFrame()
+        sessions_school = (
+            pd.DataFrame(sessions_school_list)
+            .assign(school_id=school_id)
+            .rename(columns={'id': 'session_id'})
+            .reindex(columns=[
+                'school_id',
+                'session_id',
+                'name',
+                'start_date',
+                'stop_date',
+                'current',
+                'inactive',
+                'children'        
+            ])
+            .set_index([
+                'school_id',
+                'session_id'
+            ])
+            .sort_index()
+        )
+        sessions_school['start_date'] = sessions_school['start_date'].apply(utils.to_date)
+        sessions_school['stop_date'] = sessions_school['stop_date'].apply(utils.to_date)
+        return sessions_school
+
     def fetch_classroom_data(
         self,
         school_ids=None,
