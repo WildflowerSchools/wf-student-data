@@ -1,4 +1,5 @@
 import requests
+import pandas as pd
 import json
 import os
 import logging
@@ -34,6 +35,19 @@ class TransparentClassroomClient:
                 auth=(self.username, self.password)
             )
             self.api_token = json_output['api_token']
+    
+    def fetch_school_data(
+        self,
+        parse=True
+    ):
+        schools = self.request(
+            'schools.json',
+            params=None,
+            school_id=None
+        )
+        if parse:
+            schools = parse_school_data(schools)
+        return schools
 
     def request(
         self,
@@ -65,3 +79,22 @@ class TransparentClassroomClient:
                 pass
             raise Exception(error_message)
         return r.json()
+
+def parse_school_data(
+    schools
+):
+    schools = (
+        pd.DataFrame(schools)
+        .rename(columns={'id': 'school_id'})
+        .reindex(columns=[
+            'school_id',
+            'name',
+            'address',
+            'phone',
+            'time_zone'        
+        ])
+        .set_index([
+            'school_id'
+        ])
+    )
+    return schools
