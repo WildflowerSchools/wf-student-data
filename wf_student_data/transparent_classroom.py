@@ -1,6 +1,7 @@
 import wf_student_data.utils as utils
 import requests
 import pandas as pd
+import numpy as np
 import tqdm
 import json
 import os
@@ -37,7 +38,121 @@ class TransparentClassroomClient:
                 auth=(self.username, self.password)
             )
             self.api_token = json_output['api_token']
-    
+
+    def fetch_child_data(
+        self,
+        school_ids=None,
+        progress_bar=False,
+        notebook=False
+    ):
+        if school_ids is None:
+            school_ids = self.fetch_school_ids()
+        if progress_bar:
+            if notebook:
+                school_id_iterator = tqdm.notebook.tqdm(school_ids)
+            else:
+                school_id_iterator = tqdm.tqdm(school_ids)
+        else:
+            school_id_iterator = school_ids
+        children_dfs = list()
+        children_parents_dfs=list()
+        for school_id in school_id_iterator:
+            children_school, children_parents_school = self.fetch_child_data_school(
+                school_id=school_id
+            )
+            children_dfs.append(children_school)
+            children_parents_dfs.append(children_parents_school)
+        children = (
+            pd.concat(children_dfs)
+            .sort_index()
+        )
+        children_parents = (
+            pd.concat(children_parents_dfs)
+            .sort_index()
+        )
+        return children, children_parents
+
+    def fetch_child_data_school(
+        self,
+        school_id
+    ):
+        children_school_list = self.request(
+            'children.json',
+            params={'session_id': 'all'},
+            school_id=school_id
+        )
+        if len(children_school_list) == 0:
+            logger.warning('School {} has zero children'.format(school_id))
+            return pd.DataFrame(), pd.DataFrame()
+        children_school = (
+            pd.DataFrame(children_school_list)
+            .assign(school_id=school_id)
+            .rename(columns={'id': 'child_id'})
+            .reindex(columns=[
+                'school_id',
+                'child_id',
+                'first_name',
+                'middle_name',
+                'last_name',
+                'birth_date',
+                'gender',
+                'dominant_language',
+                'ethnicity',
+                'household_income',
+                'student_id',
+                'grade',
+                'program',
+                'first_day',
+                'last_day',
+                'exit_reason',
+                'current_child'        
+            ])
+            .set_index(['school_id', 'child_id'])
+            .sort_index()
+        )
+        children_school['birth_date'] = children_school['birth_date'].apply(utils.to_date)
+        children_school['first_day'] = children_school['first_day'].apply(utils.to_date)
+        children_school['last_day'] = children_school['last_day'].apply(utils.to_date)
+        children_school['ethnicity'] = children_school['ethnicity'].replace({np.nan: None})
+        children_school_current_list = self.request(
+            'children.json',
+            params={
+                'session_id': 'all',
+                'only_current': 'true'
+            },
+            school_id=school_id
+        )
+        if len(children_school_current_list) > 0:
+            current_child_ids = {current_child['id'] for current_child in children_school_current_list}
+            children_school['current_child'] = children_school.index.get_level_values('child_id').isin(current_child_ids)
+        else:
+            logger.warning('School {} has zero current children'.format(school_id))
+            children_school['current_child'] = False
+        children_parents_school = (
+            pd.DataFrame(children_school_list)
+            .assign(school_id=school_id)
+            .rename(columns={'id': 'child_id'})
+            .reindex(columns=[
+                'school_id',
+                'child_id',
+                'parent_ids',
+            ])
+            .dropna(subset=['parent_ids'])
+            .explode('parent_ids')
+            .rename(columns={'parent_ids': 'parent_id'})
+            .set_index([
+                'school_id',
+                'child_id',
+                'parent_id',        
+            ])
+            .sort_index()
+        )
+        if len(children_parents_school) == 0:
+            logger.warning('School {} has children but zero parents'.format(
+                school_id
+            ))
+        return children_school, children_parents_school
+     
     def fetch_user_data(
         self,
         school_ids=None,
