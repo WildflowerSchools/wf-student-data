@@ -75,7 +75,7 @@ class TransparentClassroomClient:
             school_id=school_id
         )
         if len(users_school_list) == 0:
-            logging.warning('School {} has zero users'.format(school_id))
+            logger.warning('School {} has zero users'.format(school_id))
             return pd.DataFrame()
         users_school = (
             pd.DataFrame(users_school_list)
@@ -136,7 +136,7 @@ class TransparentClassroomClient:
             school_id=school_id
         )
         if len(sessions_school_list) == 0:
-            logging.warning('School {} has zero sessions'.format(
+            logger.warning('School {} has zero sessions'.format(
                 school_id
             ))
             return pd.DataFrame()
@@ -203,7 +203,7 @@ class TransparentClassroomClient:
             school_id=school_id
         )
         if len(classrooms_school_list) == 0:
-            logging.warning('School {} has zero classrooms'.format(
+            logger.warning('School {} has zero classrooms'.format(
                 school_id
             ))
             return pd.DataFrame()
