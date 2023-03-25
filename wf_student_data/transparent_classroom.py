@@ -16,12 +16,14 @@ class TransparentClassroomClient:
         username=None,
         password=None,
         api_token=None,
-        url_base='https://www.transparentclassroom.com/api/v1/'
+        url_base=None
     ):
         self.username = username
         self.password = password
         self.api_token = api_token
         self.url_base = url_base
+        if self.url_base is None:
+            self.url_base = 'https://www.transparentclassroom.com/api/v1/'
         if self.api_token is None:
             self.api_token = os.getenv('TRANSPARENT_CLASSROOM_API_TOKEN')
         if self.api_token is None:
