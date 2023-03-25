@@ -62,6 +62,7 @@ class TransparentClassroomClient:
         )
         if r.status_code != 200:
             error_message = 'Transparent Classroom request returned status code {}'.format(r.status_code)
+            # Try to add more detailed error info from HTTP response
             try:
                 if r.json().get('errors') is not None:
                     error_message += '\n{}'.format(json.dumps(r.json().get('errors'), indent=2))
@@ -76,11 +77,14 @@ class TransparentClassroomClient:
         progress_bar=False,
         notebook=False
     ):
+        # If session IDs are not specified, fetch all session IDs
+        # Each session ID is a tuple consisting of a TC school ID and a TC session ID
         if session_ids is None:
             session_ids = self.fetch_session_ids(
                 progress_bar=progress_bar,
                 notebook=notebook
             )
+        # Wrap the iterator in the appropriate progress bar if requested
         if progress_bar:
             if notebook:
                 session_id_iterator = tqdm.notebook.tqdm(session_ids)
@@ -113,6 +117,9 @@ class TransparentClassroomClient:
         )
         if len(classrooms_children_session_list) == 0:
             return pd.DataFrame()
+        # Classroom IDs are stored in TC as a list for each
+        # school/session/child. We want to turn this into a one-to-many map from
+        # classrooms to children
         classrooms_children_session = (
             pd.DataFrame(classrooms_children_session_list)
             .assign(school_id=school_id)
@@ -147,8 +154,10 @@ class TransparentClassroomClient:
         progress_bar=False,
         notebook=False
     ):
+        # If school IDs are not specified, fetch all school IDs
         if school_ids is None:
             school_ids = self.fetch_school_ids()
+        # Wrap the iterator in the appropriate progress bar if requested
         if progress_bar:
             if notebook:
                 school_id_iterator = tqdm.notebook.tqdm(school_ids)
@@ -156,6 +165,8 @@ class TransparentClassroomClient:
                 school_id_iterator = tqdm.tqdm(school_ids)
         else:
             school_id_iterator = school_ids
+        # We create two tables from TC's child data: a table of child data and a
+        # one-to-many map of children to parents. 
         children_dfs = list()
         children_parents_dfs=list()
         for school_id in school_id_iterator:
@@ -186,6 +197,7 @@ class TransparentClassroomClient:
         if len(children_school_list) == 0:
             logger.warning('School {} has zero children'.format(school_id))
             return pd.DataFrame(), pd.DataFrame()
+        # First, we extract the child-level data, excluding the child-parent mapping
         children_school = (
             pd.DataFrame(children_school_list)
             .assign(school_id=school_id)
@@ -216,6 +228,9 @@ class TransparentClassroomClient:
         children_school['first_day'] = children_school['first_day'].apply(utils.to_date)
         children_school['last_day'] = children_school['last_day'].apply(utils.to_date)
         children_school['ethnicity'] = children_school['ethnicity'].replace({np.nan: None})
+        # For each child, we want to know whether they are current in the TC
+        # system. The only way to do this is to pull again with the only_current
+        # parameter enabled and compare the lists
         children_school_current_list = self.request(
             'children.json',
             params={
@@ -230,6 +245,7 @@ class TransparentClassroomClient:
         else:
             logger.warning('School {} has zero current children'.format(school_id))
             children_school['current_child'] = False
+        # Second, we extract the child-parent mapping
         children_parents_school = (
             pd.DataFrame(children_school_list)
             .assign(school_id=school_id)
@@ -261,8 +277,10 @@ class TransparentClassroomClient:
         progress_bar=False,
         notebook=False
     ):
+        # If school IDs are not specified, fetch all school IDs
         if school_ids is None:
             school_ids = self.fetch_school_ids()
+        # Wrap the iterator in the appropriate progress bar if requested
         if progress_bar:
             if notebook:
                 school_id_iterator = tqdm.notebook.tqdm(school_ids)
@@ -334,8 +352,10 @@ class TransparentClassroomClient:
         progress_bar=False,
         notebook=False
     ):
+        # If school IDs are not specified, fetch all school IDs
         if school_ids is None:
             school_ids = self.fetch_school_ids()
+        # Wrap the iterator in the appropriate progress bar if requested
         if progress_bar:
             if notebook:
                 school_id_iterator = tqdm.notebook.tqdm(school_ids)
@@ -399,8 +419,10 @@ class TransparentClassroomClient:
         progress_bar=False,
         notebook=False
     ):
+        # If school IDs are not specified, fetch all school IDs
         if school_ids is None:
             school_ids = self.fetch_school_ids()
+        # Wrap the iterator in the appropriate progress bar if requested
         if progress_bar:
             if notebook:
                 school_id_iterator = tqdm.notebook.tqdm(school_ids)
