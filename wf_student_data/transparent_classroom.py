@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import tqdm
 import json
+import time
 import os
 import logging
 
@@ -75,7 +76,8 @@ class TransparentClassroomClient:
         self,
         session_ids=None,
         progress_bar=False,
-        notebook=False
+        notebook=False,
+        delay = None
     ):
         # If session IDs are not specified, fetch all session IDs
         # Each session ID is a tuple consisting of a TC school ID and a TC session ID
@@ -93,12 +95,22 @@ class TransparentClassroomClient:
         else:
             session_id_iterator = session_ids
         classrooms_children_dfs = list()
+        logger.info('Fetching classroom-child mapping from Transparent Classroom for {} sessions'.format(
+            len(session_ids)
+        ))
+        if delay is not None:
+            logger.info('Using delay of {} seconds between requests to avoid rate limit errors from TC API'.format(
+                delay
+            ))
         for school_id, session_id in session_id_iterator:
             classrooms_children_session = self.fetch_classroom_child_data_session(
                 school_id=school_id,
                 session_id=session_id
             )
             classrooms_children_dfs.append(classrooms_children_session)
+            # Optional delay to avoid rate limit errors from TC API
+            if delay is not None:
+                time.sleep(delay)
         classrooms_children = (
             pd.concat(classrooms_children_dfs)
             .sort_index()
@@ -152,7 +164,8 @@ class TransparentClassroomClient:
         self,
         school_ids=None,
         progress_bar=False,
-        notebook=False
+        notebook=False,
+        delay = None
     ):
         # If school IDs are not specified, fetch all school IDs
         if school_ids is None:
@@ -169,12 +182,22 @@ class TransparentClassroomClient:
         # one-to-many map of children to parents. 
         children_dfs = list()
         children_parents_dfs=list()
+        logger.info('Fetching child data and child-parent mapping from Transparent Classroom for {} schools'.format(
+            len(school_ids)
+        ))
+        if delay is not None:
+            logger.info('Using delay of {} seconds between requests to avoid rate limit errors from TC API'.format(
+                delay
+            ))
         for school_id in school_id_iterator:
             children_school, children_parents_school = self.fetch_child_data_school(
                 school_id=school_id
             )
             children_dfs.append(children_school)
             children_parents_dfs.append(children_parents_school)
+            # Optional delay to avoid rate limit errors from TC API
+            if delay is not None:
+                time.sleep(delay)
         children = (
             pd.concat(children_dfs)
             .sort_index()
@@ -275,7 +298,8 @@ class TransparentClassroomClient:
         self,
         school_ids=None,
         progress_bar=False,
-        notebook=False
+        notebook=False,
+        delay = None
     ):
         # If school IDs are not specified, fetch all school IDs
         if school_ids is None:
@@ -289,11 +313,21 @@ class TransparentClassroomClient:
         else:
             school_id_iterator = school_ids
         users_dfs = list()
+        logger.info('Fetching user data from Transparent Classroom for {} schools'.format(
+            len(school_ids)
+        ))
+        if delay is not None:
+            logger.info('Using delay of {} seconds between requests to avoid rate limit errors from TC API'.format(
+                delay
+            ))
         for school_id in school_id_iterator:
             users_school = self.fetch_user_data_school(
                 school_id=school_id
             )
             users_dfs.append(users_school)
+            # Optional delay to avoid rate limit errors from TC API
+            if delay is not None:
+                time.sleep(delay)
         users = (
             pd.concat(users_dfs)
             .sort_index()
@@ -350,7 +384,8 @@ class TransparentClassroomClient:
         self,
         school_ids=None,
         progress_bar=False,
-        notebook=False
+        notebook=False,
+        delay = None
     ):
         # If school IDs are not specified, fetch all school IDs
         if school_ids is None:
@@ -364,11 +399,21 @@ class TransparentClassroomClient:
         else:
             school_id_iterator = school_ids
         sessions_dfs = list()
+        logger.info('Fetching session data from Transparent Classroom for {} schools'.format(
+            len(school_ids)
+        ))
+        if delay is not None:
+            logger.info('Using delay of {} seconds between requests to avoid rate limit errors from TC API'.format(
+                delay
+            ))
         for school_id in school_id_iterator:
             sessions_school = self.fetch_session_data_school(
                 school_id=school_id
             )
             sessions_dfs.append(sessions_school)
+            # Optional delay to avoid rate limit errors from TC API
+            if delay is not None:
+                time.sleep(delay)
         sessions = (
             pd.concat(sessions_dfs)
             .sort_index()
@@ -417,7 +462,8 @@ class TransparentClassroomClient:
         self,
         school_ids=None,
         progress_bar=False,
-        notebook=False
+        notebook=False,
+        delay = None
     ):
         # If school IDs are not specified, fetch all school IDs
         if school_ids is None:
@@ -431,11 +477,21 @@ class TransparentClassroomClient:
         else:
             school_id_iterator = school_ids
         classrooms_dfs = list()
+        logger.info('Fetching classroom data from Transparent Classroom for {} schools'.format(
+            len(school_ids)
+        ))
+        if delay is not None:
+            logger.info('Using delay of {} seconds between requests to avoid rate limit errors from TC API'.format(
+                delay
+            ))
         for school_id in school_id_iterator:
             classrooms_school = self.fetch_classroom_data_school(
                 school_id=school_id
             )
             classrooms_dfs.append(classrooms_school)
+            # Optional delay to avoid rate limit errors from TC API
+            if delay is not None:
+                time.sleep(delay)
         classrooms = (
             pd.concat(classrooms_dfs)
             .sort_index()
@@ -484,6 +540,7 @@ class TransparentClassroomClient:
         return school_ids
     
     def fetch_school_data(self):
+        logger.info('Fetching school data from Transparent Classroom')
         schools_list = self.request(
             'schools.json',
             params=None,
