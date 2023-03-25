@@ -39,6 +39,37 @@ class TransparentClassroomClient:
             )
             self.api_token = json_output['api_token']
 
+    def request(
+        self,
+        endpoint,
+        params=None,
+        school_id=None,
+        masquerade_id=None,
+        auth=None
+    ):
+        headers = dict()
+        if self.api_token is not None:
+            headers['X-TransparentClassroomToken'] = self.api_token
+        if school_id is not None:
+            headers['X-TransparentClassroomSchoolId'] = str(school_id)
+        if masquerade_id is not None:
+            headers['X-TransparentClassroomMasqueradeId'] = str(masquerade_id)
+        r = requests.get(
+            '{}{}'.format(self.url_base, endpoint),
+            params=params,
+            headers=headers,
+            auth=auth
+        )
+        if r.status_code != 200:
+            error_message = 'Transparent Classroom request returned status code {}'.format(r.status_code)
+            try:
+                if r.json().get('errors') is not None:
+                    error_message += '\n{}'.format(json.dumps(r.json().get('errors'), indent=2))
+            except:
+                pass
+            raise Exception(error_message)
+        return r.json()
+
     def fetch_classroom_child_data(
         self,
         session_ids=None,
@@ -452,34 +483,3 @@ class TransparentClassroomClient:
             .sort_index()
         )
         return schools
-
-    def request(
-        self,
-        endpoint,
-        params=None,
-        school_id=None,
-        masquerade_id=None,
-        auth=None
-    ):
-        headers = dict()
-        if self.api_token is not None:
-            headers['X-TransparentClassroomToken'] = self.api_token
-        if school_id is not None:
-            headers['X-TransparentClassroomSchoolId'] = str(school_id)
-        if masquerade_id is not None:
-            headers['X-TransparentClassroomMasqueradeId'] = str(masquerade_id)
-        r = requests.get(
-            '{}{}'.format(self.url_base, endpoint),
-            params=params,
-            headers=headers,
-            auth=auth
-        )
-        if r.status_code != 200:
-            error_message = 'Transparent Classroom request returned status code {}'.format(r.status_code)
-            try:
-                if r.json().get('errors') is not None:
-                    error_message += '\n{}'.format(json.dumps(r.json().get('errors'), indent=2))
-            except:
-                pass
-            raise Exception(error_message)
-        return r.json()
