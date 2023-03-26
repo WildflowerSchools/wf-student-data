@@ -95,11 +95,12 @@ class PostgresClient:
         schema_name,
         table_name,
         conn,
+        drop_index=False,
         progress_bar=False,
         notebook=False
     ):
         ## TODO: Should we add option of *not* using existing connection (create connection within method)?
-        dataframe_noindex = dataframe.reset_index()
+        dataframe_noindex = dataframe.reset_index(drop=drop_index)
         column_names = dataframe_noindex.columns.tolist()
         # Build SQL string which we will use to insert each row of data
         sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({field_names}) VALUES ({value_placeholders})").format(

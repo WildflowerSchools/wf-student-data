@@ -132,6 +132,14 @@ CREATE TABLE data_dict.boolean_categories (
     PRIMARY KEY (boolean_category)
 );
 
+CREATE TABLE data_dict.ethnicity_map (
+    ethnicity_map_id    SERIAL,
+    ethnicity_response  text,
+    ethnicity_category  text,
+    PRIMARY KEY (ethnicity_map_id),
+    FOREIGN KEY (ethnicity_category) REFERENCES data_dict.ethnicity_categories(ethnicity_category)
+);
+
 """
 
 def create_student_database(
