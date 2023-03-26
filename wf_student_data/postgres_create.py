@@ -95,6 +95,43 @@ CREATE TABLE tc.classrooms_children (
     FOREIGN KEY (school_id, child_id) REFERENCES tc.children(school_id, child_id)
 );
 
+CREATE SCHEMA data_dict;
+
+CREATE TABLE data_dict.ethnicity_categories (
+    ethnicity_category              text,
+    ethnicity_display_name_english  text,
+    ethnicity_display_name_spanish  text,
+    PRIMARY KEY (ethnicity_category)
+);
+
+CREATE TABLE data_dict.gender_categories (
+    gender_category              text,
+    gender_display_name_english  text,
+    gender_display_name_spanish  text,
+    PRIMARY KEY (gender_category)
+);
+
+CREATE TABLE data_dict.household_income_categories (
+    household_income_category              text,
+    household_income_display_name_english  text,
+    household_income_display_name_spanish  text,
+    PRIMARY KEY (household_income_category)
+);
+
+CREATE TABLE data_dict.nps_categories (
+    nps_category              text,
+    nps_display_name_english  text,
+    nps_display_name_spanish  text,
+    PRIMARY KEY (nps_category)
+);
+
+CREATE TABLE data_dict.boolean_categories (
+    boolean_category              boolean,
+    boolean_display_name_english  text,
+    boolean_display_name_spanish  text,
+    PRIMARY KEY (boolean_category)
+);
+
 """
 
 def create_student_database(
