@@ -1,6 +1,8 @@
 import pandas as pd
 import psycopg2
+import psycopg2.sql
 import tqdm
+import tqdm.notebook
 import os
 import logging
 

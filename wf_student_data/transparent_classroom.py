@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import numpy as np
 import tqdm
+import tqdm.notebook
 import json
 import time
 import os
