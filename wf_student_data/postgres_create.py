@@ -140,6 +140,34 @@ CREATE TABLE data_dict.ethnicity_map (
     FOREIGN KEY (ethnicity_category) REFERENCES data_dict.ethnicity_categories(ethnicity_category)
 );
 
+CREATE TABLE data_dict.gender_map (
+    gender_response  text,
+    gender_category  text,
+    PRIMARY KEY (gender_response),
+    FOREIGN KEY (gender_category) REFERENCES data_dict.gender_categories(gender_category)
+);
+
+CREATE TABLE data_dict.household_income_map (
+    household_income_response  text,
+    household_income_category  text,
+    PRIMARY KEY (household_income_response),
+    FOREIGN KEY (household_income_category) REFERENCES data_dict.household_income_categories(household_income_category)
+);
+
+CREATE TABLE data_dict.nps_map (
+    nps_response  integer,
+    nps_category  text,
+    PRIMARY KEY (nps_response),
+    FOREIGN KEY (nps_category) REFERENCES data_dict.nps_categories(nps_category)
+);
+
+CREATE TABLE data_dict.boolean_map (
+    boolean_response  text,
+    boolean_category  boolean,
+    PRIMARY KEY (boolean_response),
+    FOREIGN KEY (boolean_category) REFERENCES data_dict.boolean_categories(boolean_category)
+);
+
 """
 
 def create_student_database(
