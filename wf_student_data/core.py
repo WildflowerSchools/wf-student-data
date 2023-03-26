@@ -1,5 +1,7 @@
 import wf_student_data.postgres as postgres
 import wf_student_data.transparent_classroom as transparent_classroom
+import pandas as pd
+import os
 import logging
 
 logger = logging.getLogger(__name__)
@@ -143,4 +145,181 @@ def update_tc_data(
     conn.commit()
     conn.close()
 
+
+def populate_data_dict_from_local(
+    pg_client=None,
+    pg_dbname=None,
+    pg_user=None,
+    pg_password=None,
+    pg_host=None,
+    pg_port=None,
+    directory='.',
+    progress_bar=False,
+    notebook=False
+):
+    # Initialize Postgres client
+    if pg_client is None:
+        pg_client = postgres.PostgresClient(
+            dbname=pg_dbname,
+            user=pg_user,
+            password=pg_password,
+            host=pg_host,
+            port=pg_port
+        )
+    # Create connection to Postgres student database
+    conn = pg_client.connect()
+    # Ethnicity categories
+    ## Fetch data from local
+    ethnicity_categories = pd.read_pickle(os.path.join(
+        directory,
+        'ethnicity_categories.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=ethnicity_categories,
+        schema_name='data_dict',
+        table_name='ethnicity_categories',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # Gender categories
+    ## Fetch data from local
+    gender_categories = pd.read_pickle(os.path.join(
+        directory,
+        'gender_categories.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=gender_categories,
+        schema_name='data_dict',
+        table_name='gender_categories',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # Household income categories
+    ## Fetch data from local
+    household_income_categories = pd.read_pickle(os.path.join(
+        directory,
+        'household_income_categories.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=household_income_categories,
+        schema_name='data_dict',
+        table_name='household_income_categories',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # NPS categories
+    ## Fetch data from local
+    nps_categories = pd.read_pickle(os.path.join(
+        directory,
+        'nps_categories.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=nps_categories,
+        schema_name='data_dict',
+        table_name='nps_categories',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # Boolean categories
+    ## Fetch data from local
+    boolean_categories = pd.read_pickle(os.path.join(
+        directory,
+        'boolean_categories.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=boolean_categories,
+        schema_name='data_dict',
+        table_name='boolean_categories',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # Ethnicity map
+    ## Fetch data from local
+    ethnicity_map = pd.read_pickle(os.path.join(
+        directory,
+        'ethnicity_map.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=ethnicity_map,
+        schema_name='data_dict',
+        table_name='ethnicity_map',
+        conn=conn,
+        drop_index=True,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # Gender map
+    ## Fetch data from local
+    gender_map = pd.read_pickle(os.path.join(
+        directory,
+        'gender_map.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=gender_map,
+        schema_name='data_dict',
+        table_name='gender_map',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # Household income map
+    ## Fetch data from local
+    household_income_map = pd.read_pickle(os.path.join(
+        directory,
+        'household_income_map.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=household_income_map,
+        schema_name='data_dict',
+        table_name='household_income_map',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # NPS map
+    ## Fetch data from local
+    nps_map = pd.read_pickle(os.path.join(
+        directory,
+        'nps_map.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=nps_map,
+        schema_name='data_dict',
+        table_name='nps_map',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # Boolean map
+    ## Fetch data from local
+    boolean_map = pd.read_pickle(os.path.join(
+        directory,
+        'boolean_map.pkl'
+    ))
+    ## Insert data into Postgres student database
+    pg_client.insert_dataframe(
+        dataframe=boolean_map,
+        schema_name='data_dict',
+        table_name='boolean_map',
+        conn=conn,
+        progress_bar=progress_bar,
+        notebook=notebook
+    )
+    # Commit changes and close connection
+    conn.commit()
+    conn.close()
 
