@@ -7,16 +7,26 @@ logger = logging.getLogger(__name__)
 SCHEMA="""
 CREATE SCHEMA tc;
 
+CREATE TABLE tc.updates (
+    update_id       SERIAL,
+    update_start    timestamp with time zone,
+    update_end      timestamp with time zone,
+    PRIMARY KEY (update_id)
+);
+
 CREATE TABLE tc.schools (
+    update_id   integer,
     school_id   integer,
     name        text,
     address     text,
     phone       text,
     time_zone   text,
-    PRIMARY KEY (school_id)
+    PRIMARY KEY (update_id, school_id),
+    FOREIGN KEY (update_id) REFERENCES tc.updates(update_id)
 );
 
 CREATE TABLE tc.sessions (
+    update_id   integer,
     school_id   integer,
     session_id  integer,
     name        text,
@@ -25,22 +35,26 @@ CREATE TABLE tc.sessions (
     current     boolean,
     inactive    boolean,
     children    integer,
-    PRIMARY KEY (school_id, session_id),
-    FOREIGN KEY (school_id) REFERENCES tc.schools(school_id)
+    PRIMARY KEY (update_id, school_id, session_id),
+    FOREIGN KEY (update_id) REFERENCES tc.updates(update_id),
+    FOREIGN KEY (update_id, school_id) REFERENCES tc.schools(update_id, school_id)
 );
 
 CREATE TABLE tc.classrooms (
+    update_id       integer,
     school_id       integer,
     classroom_id    integer,
     name            text,
     lesson_set_id   int,
     level           text,
     active          boolean,
-    PRIMARY KEY (school_id, classroom_id),
-    FOREIGN KEY (school_id) REFERENCES tc.schools(school_id)
+    PRIMARY KEY (update_id, school_id, classroom_id),
+    FOREIGN KEY (update_id) REFERENCES tc.updates(update_id),
+    FOREIGN KEY (update_id, school_id) REFERENCES tc.schools(update_id, school_id)
 );
 
 CREATE TABLE tc.users (
+    update_id   integer,
     school_id   integer,
     user_id     integer,
     first_name  text,
@@ -49,11 +63,13 @@ CREATE TABLE tc.users (
     roles       text[],
     inactive    boolean,
     type        text,
-    PRIMARY KEY (school_id, user_id),
-    FOREIGN KEY (school_id) REFERENCES tc.schools(school_id)
+    PRIMARY KEY (update_id, school_id, user_id),
+    FOREIGN KEY (update_id) REFERENCES tc.updates(update_id),
+    FOREIGN KEY (update_id, school_id) REFERENCES tc.schools(update_id, school_id)
 );
 
 CREATE TABLE tc.children (
+    update_id           integer,
     school_id           integer,
     child_id            integer,
     first_name          text,
@@ -71,28 +87,33 @@ CREATE TABLE tc.children (
     last_day            date,
     exit_reason         text,
     current_child       boolean,
-    PRIMARY KEY (school_id, child_id),
-    FOREIGN KEY (school_id) REFERENCES tc.schools(school_id)
+    PRIMARY KEY (update_id, school_id, child_id),
+    FOREIGN KEY (update_id) REFERENCES tc.updates(update_id),
+    FOREIGN KEY (update_id, school_id) REFERENCES tc.schools(update_id, school_id)
 );
 
 CREATE TABLE tc.children_parents (
+    update_id   integer,
     school_id   integer,
     child_id    integer,
     parent_id   integer,
-    PRIMARY KEY (school_id, child_id, parent_id),
-    FOREIGN KEY (school_id, child_id) REFERENCES tc.children(school_id, child_id),
-    FOREIGN KEY (school_id, parent_id) REFERENCES tc.users(school_id, user_id)
+    PRIMARY KEY (update_id, school_id, child_id, parent_id),
+    FOREIGN KEY (update_id) REFERENCES tc.updates(update_id),
+    FOREIGN KEY (update_id, school_id, child_id) REFERENCES tc.children(update_id, school_id, child_id),
+    FOREIGN KEY (update_id, school_id, parent_id) REFERENCES tc.users(update_id, school_id, user_id)
 );
 
 CREATE TABLE tc.classrooms_children (
+    update_id       integer,
     school_id       integer,
     session_id      integer,
     classroom_id    integer,
     child_id        integer,
-    PRIMARY KEY (school_id, session_id, classroom_id, child_id),
-    FOREIGN KEY (school_id, session_id) REFERENCES tc.sessions(school_id, session_id),
-    FOREIGN KEY (school_id, classroom_id) REFERENCES tc.classrooms(school_id, classroom_id),
-    FOREIGN KEY (school_id, child_id) REFERENCES tc.children(school_id, child_id)
+    PRIMARY KEY (update_id, school_id, session_id, classroom_id, child_id),
+    FOREIGN KEY (update_id) REFERENCES tc.updates(update_id),
+    FOREIGN KEY (update_id, school_id, session_id) REFERENCES tc.sessions(update_id, school_id, session_id),
+    FOREIGN KEY (update_id, school_id, classroom_id) REFERENCES tc.classrooms(update_id, school_id, classroom_id),
+    FOREIGN KEY (update_id, school_id, child_id) REFERENCES tc.children(update_id, school_id, child_id)
 );
 
 CREATE SCHEMA data_dict;

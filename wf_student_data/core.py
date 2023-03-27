@@ -1,12 +1,14 @@
 import wf_student_data.postgres as postgres
 import wf_student_data.transparent_classroom as transparent_classroom
 import pandas as pd
+import datetime
 import os
 import logging
 
 logger = logging.getLogger(__name__)
 
 def update_tc_data(
+    update_start=None,
     pg_client=None,
     pg_dbname=None,
     pg_user=None,
@@ -42,8 +44,26 @@ def update_tc_data(
     # Create connection to Postgres student database
     conn = pg_client.connect()
     try:
+        # Create new update in updates table
+        if update_start is None:
+            update_start = datetime.datetime.now(tz=datetime.timezone.utc)
+        update_id = pg_client.create_tc_update(
+            update_start=update_start,
+            conn=conn
+        )
+        logger.info('Update with ID {} starting at {}'.format(
+            update_id,
+            update_start.isoformat()
+        ))
         # Fetch school data from Transparent Classroom
         schools = tc_client.fetch_school_data()
+        school_ids = schools.index
+        # Add update ID to school data
+        schools = (
+            schools
+            .assign(update_id=update_id)
+            .set_index('update_id', append=True)
+        )
         # Insert school data into Postgres student database
         pg_client.insert_dataframe(
             dataframe=schools,
@@ -55,10 +75,16 @@ def update_tc_data(
         )
         # Fetch classroom data from Transparent Classroom
         classrooms = tc_client.fetch_classroom_data(
-            school_ids=schools.index,
+            school_ids=school_ids,
             progress_bar=progress_bar,
             notebook=notebook,
             delay=delay
+        )
+        # Add update ID to classroom data
+        classrooms = (
+            classrooms
+            .assign(update_id=update_id)
+            .set_index('update_id', append=True)
         )
         # Insert classroom data into Postgres student database
         pg_client.insert_dataframe(
@@ -71,10 +97,17 @@ def update_tc_data(
         )
         # Fetch session data from Transparent Classroom
         sessions = tc_client.fetch_session_data(
-            school_ids=schools.index,
+            school_ids=school_ids,
             progress_bar=progress_bar,
             notebook=notebook,
             delay=delay
+        )
+        session_ids = sessions.index
+        # Add update ID to session data
+        sessions = (
+            sessions
+            .assign(update_id=update_id)
+            .set_index('update_id', append=True)
         )
         # Insert session data into Postgres student database
         pg_client.insert_dataframe(
@@ -87,10 +120,16 @@ def update_tc_data(
         )
         # Fetch user data from Transparent Classroom
         users = tc_client.fetch_user_data(
-            school_ids=schools.index,
-            progress_bar=progress_bar,
-            notebook=notebook,
-            delay=delay
+                school_ids=school_ids,
+                progress_bar=progress_bar,
+                notebook=notebook,
+                delay=delay
+        )
+        # Add update ID to user data
+        users = (
+            users
+            .assign(update_id=update_id)
+            .set_index('update_id', append=True)
         )
         # Insert user data into Postgres student database
         pg_client.insert_dataframe(
@@ -103,10 +142,21 @@ def update_tc_data(
         )
         # Fetch child data and child-parent data from Transparent Classroom
         children, children_parents = tc_client.fetch_child_data(
-            school_ids=schools.index,
+            school_ids=school_ids,
             progress_bar=progress_bar,
             notebook=notebook,
             delay=delay
+        )
+        # Add update ID to child data and child-parent_data
+        children = (
+            children
+            .assign(update_id=update_id)
+            .set_index('update_id', append=True)
+        )
+        children_parents = (
+            children_parents
+            .assign(update_id=update_id)
+            .set_index('update_id', append=True)
         )
         # Insert child data into Postgres student database
         pg_client.insert_dataframe(
@@ -128,10 +178,16 @@ def update_tc_data(
         )
         # Fetch classroom-child data from Transparent Classroom
         classrooms_children = tc_client.fetch_classroom_child_data(
-            session_ids=sessions.index,
+            session_ids=session_ids,
             progress_bar=progress_bar,
             notebook=notebook,
             delay=delay
+        )
+        # Add update ID to classroom-child data
+        classrooms_children = (
+            classrooms_children
+            .assign(update_id=update_id)
+            .set_index('update_id', append=True)
         )
         # Insert classroom-child data into Postgres student database
         pg_client.insert_dataframe(
@@ -142,6 +198,21 @@ def update_tc_data(
             progress_bar=progress_bar,
             notebook=notebook
         )
+        # Record end of update session
+        update_end = datetime.datetime.now(tz=datetime.timezone.utc)
+        pg_client.update_row(
+            schema_name='tc',
+            table_name='updates',
+            index_names=['update_id'],
+            index_values=[update_id],
+            column_names=['update_end'],
+            column_values=[update_end],
+            conn=conn
+        )
+        logger.info('Update with ID {} ended at {}'.format(
+            update_id,
+            update_end.isoformat()
+        ))
     except Exception as err:
         # If there is an error anywhere, roll back all of the changes
         logger.error('Error occurred when updating TC data. Rolling back changes')

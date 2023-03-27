@@ -127,3 +127,71 @@ class PostgresClient:
             for index, row in dataframe_iterator:
                 cur.execute(sql_object, row.tolist())
 
+    def create_tc_update(
+        self,
+        update_start,
+        conn
+    ):
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO tc.updates (update_start) VALUES (%s) RETURNING update_id", [update_start])
+            update_id = cur.fetchone()[0]
+        return update_id
+    
+    def update_row(
+        self,
+        schema_name,
+        table_name,
+        index_names,
+        index_values,
+        column_names,
+        column_values,
+        conn
+    ):
+        sql_object, parameters = self.compose_update_row_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            index_names=index_names,
+            index_values=index_values,
+            column_names=column_names,
+            column_values=column_values
+        )
+        self.execute(
+            sql_object=sql_object,
+            parameters=parameters,
+            conn=conn
+        )
+
+    def compose_update_row_sql(
+        self,
+        schema_name,
+        table_name,
+        index_names,
+        index_values,
+        column_names,
+        column_values
+    ):
+        sql_object = psycopg2.sql.SQL("UPDATE {schema_name}.{table_name} SET {column_specifications} WHERE ({index_names}) = ({index_value_placeholders});").format(
+            schema_name=psycopg2.sql.Identifier(schema_name),
+            table_name=psycopg2.sql.Identifier(table_name),
+            column_specifications=psycopg2.sql.SQL(', ').join([
+                    psycopg2.sql.SQL('{column_name}={column_placeholder}').format(
+                        column_name=psycopg2.sql.Identifier(column_name),
+                        column_placeholder=psycopg2.sql.Placeholder()
+                    )
+                    for column_name in column_names
+            ]),
+            index_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(index_name) for index_name in index_names]),
+            index_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(index_values))
+        )
+        parameters = list(column_values) + list(index_values)
+        return sql_object, parameters
+
+    def execute(
+        self,
+        sql_object,
+        parameters,
+        conn
+    ):
+        logger.debug(sql_object.as_string(conn))
+        with conn.cursor() as cur:
+            cur.execute(sql_object, parameters)
