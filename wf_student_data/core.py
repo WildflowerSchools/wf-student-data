@@ -249,9 +249,7 @@ def populate_data_dict_from_local(
             dataframe=ethnicity_categories,
             schema_name='data_dict',
             table_name='ethnicity_categories',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Gender categories
         ## Fetch data from local
@@ -264,9 +262,7 @@ def populate_data_dict_from_local(
             dataframe=gender_categories,
             schema_name='data_dict',
             table_name='gender_categories',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Household income categories
         ## Fetch data from local
@@ -279,9 +275,7 @@ def populate_data_dict_from_local(
             dataframe=household_income_categories,
             schema_name='data_dict',
             table_name='household_income_categories',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # NPS categories
         ## Fetch data from local
@@ -294,9 +288,7 @@ def populate_data_dict_from_local(
             dataframe=nps_categories,
             schema_name='data_dict',
             table_name='nps_categories',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Boolean categories
         ## Fetch data from local
@@ -309,9 +301,7 @@ def populate_data_dict_from_local(
             dataframe=boolean_categories,
             schema_name='data_dict',
             table_name='boolean_categories',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Ethnicity map
         ## Fetch data from local
@@ -325,9 +315,7 @@ def populate_data_dict_from_local(
             schema_name='data_dict',
             table_name='ethnicity_map',
             conn=conn,
-            drop_index=True,
-            progress_bar=progress_bar,
-            notebook=notebook
+            drop_index=True
         )
         # Gender map
         ## Fetch data from local
@@ -340,9 +328,7 @@ def populate_data_dict_from_local(
             dataframe=gender_map,
             schema_name='data_dict',
             table_name='gender_map',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Household income map
         ## Fetch data from local
@@ -355,9 +341,7 @@ def populate_data_dict_from_local(
             dataframe=household_income_map,
             schema_name='data_dict',
             table_name='household_income_map',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # NPS map
         ## Fetch data from local
@@ -370,9 +354,7 @@ def populate_data_dict_from_local(
             dataframe=nps_map,
             schema_name='data_dict',
             table_name='nps_map',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Boolean map
         ## Fetch data from local
@@ -385,9 +367,7 @@ def populate_data_dict_from_local(
             dataframe=boolean_map,
             schema_name='data_dict',
             table_name='boolean_map',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
     except Exception as err:
         # If there is an error anywhere, roll back all of the changes
