@@ -47,10 +47,15 @@ def update_tc_data(
         # Create new update in updates table
         if update_start is None:
             update_start = datetime.datetime.now(tz=datetime.timezone.utc)
-        update_id = pg_client.create_tc_update(
-            update_start=update_start,
-            conn=conn
+        data = pg_client.insert_row(
+            schema_name='tc',
+            table_name='updates',
+            column_names=['update_start'],
+            column_values=[update_start],
+            conn=conn,
+            return_names=['update_id']
         )
+        update_id = data[0][0]
         logger.info('Update with ID {} starting at {}'.format(
             update_id,
             update_start.isoformat()
@@ -69,9 +74,7 @@ def update_tc_data(
             dataframe=schools,
             schema_name='tc',
             table_name='schools',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Fetch classroom data from Transparent Classroom
         classrooms = tc_client.fetch_classroom_data(
@@ -91,9 +94,7 @@ def update_tc_data(
             dataframe=classrooms,
             schema_name='tc',
             table_name='classrooms',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Fetch session data from Transparent Classroom
         sessions = tc_client.fetch_session_data(
@@ -114,9 +115,7 @@ def update_tc_data(
             dataframe=sessions,
             schema_name='tc',
             table_name='sessions',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Fetch user data from Transparent Classroom
         users = tc_client.fetch_user_data(
@@ -136,9 +135,7 @@ def update_tc_data(
             dataframe=users,
             schema_name='tc',
             table_name='users',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Fetch child data and child-parent data from Transparent Classroom
         children, children_parents = tc_client.fetch_child_data(
@@ -163,18 +160,14 @@ def update_tc_data(
             dataframe=children,
             schema_name='tc',
             table_name='children',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Insert child-parent data into Postgres student database
         pg_client.insert_dataframe(
             dataframe=children_parents,
             schema_name='tc',
             table_name='children_parents',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Fetch classroom-child data from Transparent Classroom
         classrooms_children = tc_client.fetch_classroom_child_data(
@@ -194,9 +187,7 @@ def update_tc_data(
             dataframe=classrooms_children,
             schema_name='tc',
             table_name='classrooms_children',
-            conn=conn,
-            progress_bar=progress_bar,
-            notebook=notebook
+            conn=conn
         )
         # Record end of update session
         update_end = datetime.datetime.now(tz=datetime.timezone.utc)

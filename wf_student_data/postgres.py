@@ -95,48 +95,76 @@ class PostgresClient:
         schema_name,
         table_name,
         conn,
-        drop_index=False,
-        progress_bar=False,
-        notebook=False
+        drop_index=False
     ):
         ## TODO: Should we add option of *not* using existing connection (create connection within method)?
         dataframe_noindex = dataframe.reset_index(drop=drop_index)
         column_names = dataframe_noindex.columns.tolist()
-        # Build SQL string which we will use to insert each row of data
-        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({field_names}) VALUES ({value_placeholders})").format(
-            schema_name=psycopg2.sql.Identifier(schema_name),
-            table_name=psycopg2.sql.Identifier(table_name),
-            field_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in column_names]),
-            value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(column_names))
-        )
-        # Use the appropriate progress bar if indicated
-        if progress_bar:
-            if notebook:
-                dataframe_iterator = tqdm.notebook.tqdm(dataframe_noindex.iterrows(), total=len(dataframe_noindex))
-            else:
-                dataframe_iterator = tqdm.tqdm(dataframe_noindex.iterrows(), total=len(dataframe_noindex))
-        else:
-            dataframe_iterator = dataframe_noindex.iterrows()
-        # Iterate through dataframe, inserting each row
-        ## TODO: Implement bulk insert?
+        column_values_list = dataframe_noindex.to_dict(orient='tight')['data']
         logger.info('Inserting data into \'{}\' table in \'{}\' schema'.format(
            table_name,
            schema_name 
         ))
-        with conn.cursor() as cur:
-            for index, row in dataframe_iterator:
-                cur.execute(sql_object, row.tolist())
-
-    def create_tc_update(
+        self.insert_rows(
+            schema_name=schema_name,
+            table_name=table_name,
+            column_names=column_names,
+            column_values_list=column_values_list,
+            conn=conn
+        )
+    
+    def insert_rows(
         self,
-        update_start,
+        schema_name,
+        table_name,
+        column_names,
+        column_values_list,
         conn
     ):
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO tc.updates (update_start) VALUES (%s) RETURNING update_id", [update_start])
-            update_id = cur.fetchone()[0]
-        return update_id
-    
+        sql_object, parameters = self.compose_insert_rows_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            column_names=column_names,
+            column_values_list=column_values_list
+        )
+        self.executemany(
+            sql_object=sql_object,
+            parameters=parameters,
+            conn=conn
+        )
+
+    def insert_row(
+        self,
+        schema_name,
+        table_name,
+        column_names,
+        column_values,
+        conn,
+        return_names=None
+    ):
+        sql_object, parameters = self.compose_insert_row_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            column_names=column_names,
+            column_values=column_values,
+            return_names=return_names
+        )
+        if return_names is not None:
+            data = self.execute(
+                sql_object=sql_object,
+                parameters=parameters,
+                conn=conn,
+                return_data=True
+            )
+            return data
+        else:
+            self.execute(
+                sql_object=sql_object,
+                parameters=parameters,
+                conn=conn,
+                return_data=False
+            )
+
     def update_row(
         self,
         schema_name,
@@ -158,8 +186,49 @@ class PostgresClient:
         self.execute(
             sql_object=sql_object,
             parameters=parameters,
-            conn=conn
+            conn=conn,
+            return_data=False
         )
+
+    def compose_insert_rows_sql(
+        self,
+        schema_name,
+        table_name,
+        column_names,
+        column_values_list
+    ):
+        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({column_names}) VALUES ({column_value_placeholders})").format(
+            schema_name=psycopg2.sql.Identifier(schema_name),
+            table_name=psycopg2.sql.Identifier(table_name),
+            column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in column_names]),
+            column_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(column_names))
+        )
+        parameters = list(column_values_list)
+        return sql_object, parameters
+
+    def compose_insert_row_sql(
+        self,
+        schema_name,
+        table_name,
+        column_names,
+        column_values,
+        return_names=None
+    ):
+        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({column_names}) VALUES ({column_value_placeholders})").format(
+            schema_name=psycopg2.sql.Identifier(schema_name),
+            table_name=psycopg2.sql.Identifier(table_name),
+            column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in column_names]),
+            column_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(column_names))
+        )
+        if return_names is not None:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("RETURNING ({return_names})").format(
+                    return_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(return_name) for return_name in return_names])
+                )
+            ])
+        parameters = list(column_values)
+        return sql_object, parameters
 
     def compose_update_row_sql(
         self,
@@ -190,8 +259,22 @@ class PostgresClient:
         self,
         sql_object,
         parameters,
-        conn
+        conn,
+        return_data=False
     ):
         logger.debug(sql_object.as_string(conn))
         with conn.cursor() as cur:
             cur.execute(sql_object, parameters)
+            if return_data:
+                data = cur.fetchall()
+                return data
+
+    def executemany(
+        self,
+        sql_object,
+        parameters,
+        conn
+    ):
+        logger.debug(sql_object.as_string(conn))
+        with conn.cursor() as cur:
+            cur.executemany(sql_object, parameters)
