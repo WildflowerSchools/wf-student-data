@@ -165,6 +165,30 @@ class PostgresClient:
                 return_data=False
             )
 
+    def update_rows(
+        self,
+        schema_name,
+        table_name,
+        index_names,
+        index_values_list,
+        column_names,
+        column_values_list,
+        conn
+    ):
+        sql_object, parameters = self.compose_update_rows_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            index_names=index_names,
+            index_values_list=index_values_list,
+            column_names=column_names,
+            column_values_list=column_values_list
+        )
+        self.executemany(
+            sql_object=sql_object,
+            parameters=parameters,
+            conn=conn
+        )
+
     def update_row(
         self,
         schema_name,
@@ -228,6 +252,33 @@ class PostgresClient:
                 )
             ])
         parameters = list(column_values)
+        return sql_object, parameters
+
+    def compose_update_rows_sql(
+        self,
+        schema_name,
+        table_name,
+        index_names,
+        index_values_list,
+        column_names,
+        column_values_list
+    ):
+        if len(index_values_list) != len(column_values_list):
+            raise ValueError('Column values list and index values list must be of same length')
+        sql_object = psycopg2.sql.SQL("UPDATE {schema_name}.{table_name} SET {column_specifications} WHERE ({index_names}) = ({index_value_placeholders});").format(
+            schema_name=psycopg2.sql.Identifier(schema_name),
+            table_name=psycopg2.sql.Identifier(table_name),
+            column_specifications=psycopg2.sql.SQL(', ').join([
+                    psycopg2.sql.SQL('{column_name}={column_placeholder}').format(
+                        column_name=psycopg2.sql.Identifier(column_name),
+                        column_placeholder=psycopg2.sql.Placeholder()
+                    )
+                    for column_name in column_names
+            ]),
+            index_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(index_name) for index_name in index_names]),
+            index_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(index_names))
+        )
+        parameters = [list(column_values) + list(index_values) for column_values, index_values in zip(column_values_list, index_values_list)]
         return sql_object, parameters
 
     def compose_update_row_sql(
