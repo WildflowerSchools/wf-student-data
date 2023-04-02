@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import psycopg2
 import psycopg2.sql
 import tqdm
@@ -120,7 +121,7 @@ class PostgresClient:
         table_name,
         update_values,
         value_index_names,
-        value_column_name,
+        value_column_names,
         conn,
         update_time=None,
     ):
@@ -136,14 +137,16 @@ class PostgresClient:
             .loc[assignments['assignment_end'].isna()]
             .reset_index()
             .set_index(value_index_names)
-            .reindex(columns=['assignment_id', value_column_name])
+            .reindex(columns=['assignment_id'] + value_column_names)
         )
-        current_values=current_assignments[value_column_name]
-        deleted_values = current_values[current_values.index.difference(update_values.index)]
-        new_values = update_values[update_values.index.difference(current_values.index)]
-        changed_values = update_values[current_values.index.intersection(update_values.index)].loc[
-            current_values[current_values.index.intersection(update_values.index)] !=
-            update_values[current_values.index.intersection(update_values.index)]
+        current_values=current_assignments.reindex(columns=value_column_names)
+        deleted_values = current_values.loc[current_values.index.difference(update_values.index)]
+        new_values = update_values.loc[update_values.index.difference(current_values.index)]
+        changed_values = update_values.loc[current_values.index.intersection(update_values.index)].loc[
+            (
+                current_values.loc[current_values.index.intersection(update_values.index)] !=
+                update_values.loc[current_values.index.intersection(update_values.index)]
+            ).apply(np.all, axis=1)
         ]
         end_assignment_ids = (
             current_assignments
@@ -164,8 +167,8 @@ class PostgresClient:
             assignment_start=update_time,
             values=new_assignments,
             conn=conn,
-            index_names=value_index_names,
-            value_name=value_column_name
+            value_index_names=value_index_names,
+            value_column_names=value_column_names
         )
 
     def start_assignments(
@@ -175,26 +178,25 @@ class PostgresClient:
         values,
         conn,
         assignment_start=None,
-        index_names=None,
-        value_name=None
+        value_index_names=None,
+        value_column_names=None
     ):
         if len(values) == 0:
-            logger.warning('Values series is empty')
+            logger.warning('Values dataframe is empty')
             return
         if assignment_start is None:
             assignment_start = datetime.datetime.now(tz=datetime.timezone.utc)
         values = values.copy()
-        if index_names is None:
-            index_names = list(values.index.names)
+        if value_index_names is None:
+            value_index_names = list(values.index.names)
         else:
-            values.index.names = index_names
-        if value_name is None:
-            value_name = values.name
+            values.index.names = value_index_names
+        if value_column_names is None:
+            value_column_names = values.columns.tolist()
         else:
-            values.name = value_name
+            values.columns = value_column_names
         insert_df = (
             values
-            .to_frame()
             .assign(assignment_start=assignment_start)
         )
         self.insert_dataframe(
