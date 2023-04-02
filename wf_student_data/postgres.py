@@ -3,6 +3,7 @@ import psycopg2
 import psycopg2.sql
 import tqdm
 import tqdm.notebook
+import datetime
 import os
 import logging
 
@@ -113,6 +114,123 @@ class PostgresClient:
             conn=conn
         )
     
+    def update_assignments(
+        self,
+        schema_name,
+        table_name,
+        update_values,
+        value_index_names,
+        value_column_name,
+        conn,
+        update_time=None,
+    ):
+        if update_time is None:
+            update_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        assignments = self.fetch_dataframe(
+            schema_name=schema_name,
+            table_name=table_name,
+            index_columns=['assignment_id']
+        )
+        current_assignments = (
+            assignments
+            .loc[assignments['assignment_end'].isna()]
+            .reset_index()
+            .set_index(value_index_names)
+            .reindex(columns=['assignment_id', value_column_name])
+        )
+        current_values=current_assignments[value_column_name]
+        deleted_values = current_values[current_values.index.difference(update_values.index)]
+        new_values = update_values[update_values.index.difference(current_values.index)]
+        changed_values = update_values[current_values.index.intersection(update_values.index)].loc[
+            current_values[current_values.index.intersection(update_values.index)] !=
+            update_values[current_values.index.intersection(update_values.index)]
+        ]
+        end_assignment_ids = (
+            current_assignments
+            .loc[deleted_values.index.union(changed_values.index)]['assignment_id']
+            .tolist()
+        )
+        new_assignments = pd.concat([changed_values, new_values])
+        self.end_assignments(
+            schema_name=schema_name,
+            table_name=table_name,
+            assignment_ids=end_assignment_ids,
+            conn=conn,
+            assignment_end=update_time
+        )
+        self.start_assignments(
+            schema_name=schema_name,
+            table_name=table_name,
+            assignment_start=update_time,
+            values=new_assignments,
+            conn=conn,
+            index_names=value_index_names,
+            value_name=value_column_name
+        )
+
+    def start_assignments(
+        self,
+        schema_name,
+        table_name,
+        values,
+        conn,
+        assignment_start=None,
+        index_names=None,
+        value_name=None
+    ):
+        if len(values) == 0:
+            logger.warning('Values series is empty')
+            return
+        if assignment_start is None:
+            assignment_start = datetime.datetime.now(tz=datetime.timezone.utc)
+        values = values.copy()
+        if index_names is None:
+            index_names = list(values.index.names)
+        else:
+            values.index.names = index_names
+        if value_name is None:
+            value_name = values.name
+        else:
+            values.name = value_name
+        insert_df = (
+            values
+            .to_frame()
+            .assign(assignment_start=assignment_start)
+        )
+        self.insert_dataframe(
+            dataframe=insert_df,
+            schema_name=schema_name,
+            table_name=table_name,
+            conn=conn,
+            drop_index=False
+        )
+
+    def end_assignments(
+        self,
+        schema_name,
+        table_name,
+        assignment_ids,
+        conn,
+        assignment_end=None
+    ):
+        if len(assignment_ids) == 0:
+            logger.warning('Assignment ID list is empty')
+        if assignment_end is None:
+            assignment_end = datetime.datetime.now(tz=datetime.timezone.utc)
+        index_names = ['assignment_id']
+        index_values_list = [[assignment_id] for assignment_id in assignment_ids]
+        column_names = ['assignment_end']
+        column_values_list=[[assignment_end] for _ in range(len(assignment_ids))]
+        self.update_rows(
+            schema_name=schema_name,
+            table_name=table_name,
+            index_names=index_names,
+            index_values_list=index_values_list,
+            column_names=column_names,
+            column_values_list=column_values_list,
+            conn=conn
+        )
+
     def insert_rows(
         self,
         schema_name,
