@@ -42,7 +42,7 @@ def update_tc_data(
             url_base=tc_url_base
         )
     # Create connection to Postgres student database
-    conn = pg_client.connect()
+    connection = pg_client.connect()
     try:
         # Create new update in updates table
         if update_start is None:
@@ -52,8 +52,8 @@ def update_tc_data(
             table_name='updates',
             insert_column_names=['update_start'],
             insert_values=[update_start],
-            conn=conn,
-            return_column_names=['update_id']
+            return_column_names=['update_id'],
+            connection=connection
         )
         update_id = data[0][0]
         logger.info('Update with ID {} starting at {}'.format(
@@ -74,7 +74,7 @@ def update_tc_data(
             dataframe=schools,
             schema_name='tc',
             table_name='schools',
-            conn=conn
+            connection=connection
         )
         # Fetch classroom data from Transparent Classroom
         classrooms = tc_client.fetch_classroom_data(
@@ -94,7 +94,7 @@ def update_tc_data(
             dataframe=classrooms,
             schema_name='tc',
             table_name='classrooms',
-            conn=conn
+            connection=connection
         )
         # Fetch session data from Transparent Classroom
         sessions = tc_client.fetch_session_data(
@@ -115,7 +115,7 @@ def update_tc_data(
             dataframe=sessions,
             schema_name='tc',
             table_name='sessions',
-            conn=conn
+            connection=connection
         )
         # Fetch user data from Transparent Classroom
         users = tc_client.fetch_user_data(
@@ -135,7 +135,7 @@ def update_tc_data(
             dataframe=users,
             schema_name='tc',
             table_name='users',
-            conn=conn
+            connection=connection
         )
         # Fetch child data and child-parent data from Transparent Classroom
         children, children_parents = tc_client.fetch_child_data(
@@ -160,14 +160,14 @@ def update_tc_data(
             dataframe=children,
             schema_name='tc',
             table_name='children',
-            conn=conn
+            connection=connection
         )
         # Insert child-parent data into Postgres student database
         pg_client.insert_dataframe(
             dataframe=children_parents,
             schema_name='tc',
             table_name='children_parents',
-            conn=conn
+            connection=connection
         )
         # Fetch classroom-child data from Transparent Classroom
         classrooms_children = tc_client.fetch_classroom_child_data(
@@ -187,7 +187,7 @@ def update_tc_data(
             dataframe=classrooms_children,
             schema_name='tc',
             table_name='classrooms_children',
-            conn=conn
+            connection=connection
         )
         # Record end of update session
         update_end = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -198,7 +198,7 @@ def update_tc_data(
             match_values=[update_id],
             update_column_names=['update_end'],
             update_values=[update_end],
-            conn=conn
+            connection=connection
         )
         logger.info('Update with ID {} ended at {}'.format(
             update_id,
@@ -207,12 +207,12 @@ def update_tc_data(
     except Exception as err:
         # If there is an error anywhere, roll back all of the changes
         logger.error('Error occurred when updating TC data. Rolling back changes')
-        conn.rollback()
-        conn.close()
+        connection.rollback()
+        connection.close()
         raise(err)
     # Commit changes and close connection
-    conn.commit()
-    conn.close()
+    connection.commit()
+    connection.close()
 
 
 def populate_data_dict_from_local(
@@ -236,7 +236,7 @@ def populate_data_dict_from_local(
             port=pg_port
         )
     # Create connection to Postgres student database
-    conn = pg_client.connect()
+    connection = pg_client.connect()
     try:
         # Ethnicity categories
         ## Fetch data from local
@@ -249,7 +249,7 @@ def populate_data_dict_from_local(
             dataframe=ethnicity_categories,
             schema_name='data_dict',
             table_name='ethnicity_categories',
-            conn=conn
+            connection=connection
         )
         # Gender categories
         ## Fetch data from local
@@ -262,7 +262,7 @@ def populate_data_dict_from_local(
             dataframe=gender_categories,
             schema_name='data_dict',
             table_name='gender_categories',
-            conn=conn
+            connection=connection
         )
         # Household income categories
         ## Fetch data from local
@@ -275,7 +275,7 @@ def populate_data_dict_from_local(
             dataframe=household_income_categories,
             schema_name='data_dict',
             table_name='household_income_categories',
-            conn=conn
+            connection=connection
         )
         # NPS categories
         ## Fetch data from local
@@ -288,7 +288,7 @@ def populate_data_dict_from_local(
             dataframe=nps_categories,
             schema_name='data_dict',
             table_name='nps_categories',
-            conn=conn
+            connection=connection
         )
         # Boolean categories
         ## Fetch data from local
@@ -301,7 +301,7 @@ def populate_data_dict_from_local(
             dataframe=boolean_categories,
             schema_name='data_dict',
             table_name='boolean_categories',
-            conn=conn
+            connection=connection
         )
         # Ethnicity map
         ## Fetch data from local
@@ -314,8 +314,8 @@ def populate_data_dict_from_local(
             dataframe=ethnicity_map,
             schema_name='data_dict',
             table_name='ethnicity_map',
-            conn=conn,
-            drop_index=True
+            drop_index=True,
+            connection=connection
         )
         # Gender map
         ## Fetch data from local
@@ -328,7 +328,7 @@ def populate_data_dict_from_local(
             dataframe=gender_map,
             schema_name='data_dict',
             table_name='gender_map',
-            conn=conn
+            connection=connection
         )
         # Household income map
         ## Fetch data from local
@@ -341,7 +341,7 @@ def populate_data_dict_from_local(
             dataframe=household_income_map,
             schema_name='data_dict',
             table_name='household_income_map',
-            conn=conn
+            connection=connection
         )
         # NPS map
         ## Fetch data from local
@@ -354,7 +354,7 @@ def populate_data_dict_from_local(
             dataframe=nps_map,
             schema_name='data_dict',
             table_name='nps_map',
-            conn=conn
+            connection=connection
         )
         # Boolean map
         ## Fetch data from local
@@ -367,15 +367,15 @@ def populate_data_dict_from_local(
             dataframe=boolean_map,
             schema_name='data_dict',
             table_name='boolean_map',
-            conn=conn
+            connection=connection
         )
     except Exception as err:
         # If there is an error anywhere, roll back all of the changes
         logger.error('Error occurred when populating data dict. Rolling back changes')
-        conn.rollback()
-        conn.close()
+        connection.rollback()
+        connection.close()
         raise(err)
     # Commit changes and close connection
-    conn.commit()
-    conn.close()
+    connection.commit()
+    connection.close()
 

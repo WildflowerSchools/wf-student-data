@@ -51,41 +51,54 @@ class PostgresClient:
     def connect(self):
         # Connect to student database
         logger.info('Connecting to student database with connection specifications {}'.format(self.connect_kwargs))
-        conn = psycopg2.connect(**self.connect_kwargs)
-        return conn
+        connection = psycopg2.connect(**self.connect_kwargs)
+        return connection
 
     def execute(
         self,
         sql_object,
         parameters,
-        conn,
-        return_data=False
+        return_data=False,
+        connection=None
     ):
-        logger.debug(sql_object.as_string(conn))
-        with conn.cursor() as cur:
+        existing_connection = True if connection is not None else False
+        if not existing_connection:
+            connection = self.connect()
+        logger.debug(sql_object.as_string(connection))
+        with connection.cursor() as cur:
             cur.execute(sql_object, parameters)
             description = cur.description
             if return_data:
                 data = cur.fetchall()
             else:
                 data = None
+        if not existing_connection:
+            connection.commit()
+            connection.close()
         return data, description
 
     def executemany(
         self,
         sql_object,
         parameters_list,
-        conn
+        connection=None
     ):
-        logger.debug(sql_object.as_string(conn))
-        with conn.cursor() as cur:
+        existing_connection = True if connection is not None else False
+        if not existing_connection:
+            connection = self.connect()
+        logger.debug(sql_object.as_string(connection))
+        with connection.cursor() as cur:
             cur.executemany(sql_object, parameters_list)
+        if not existing_connection:
+            connection.commit()
+            connection.close()
 
     def fetch_dataframe(
         self,
         schema_name,
         table_name,
-        index_column_names=None
+        index_column_names=None,
+        connection=None
     ):
         ## TODO: Should we add option of using existing connection?
         # Read data from student database
@@ -97,13 +110,12 @@ class PostgresClient:
             schema_name=schema_name,
             table_name=table_name
         )
-        with self.connect() as conn:
-            data, description = self.execute(
-                sql_object=sql_object,
-                parameters=None,
-                conn=conn,
-                return_data=True
-            )
+        data, description = self.execute(
+            sql_object=sql_object,
+            parameters=None,
+            return_data=True,
+            connection=connection
+        )
         column_names = [descriptor.name for descriptor in description]
         # Convert to dataframe
         logger.info('Converting to Pandas dataframe')
@@ -126,8 +138,8 @@ class PostgresClient:
         dataframe,
         schema_name,
         table_name,
-        conn,
-        drop_index=False
+        drop_index=False,
+        connection=None
     ):
         ## TODO: Should we add option of *not* using existing connection (create connection within method)?
         dataframe_noindex = dataframe.reset_index(drop=drop_index)
@@ -142,7 +154,7 @@ class PostgresClient:
             table_name=table_name,
             insert_column_names=insert_column_names,
             insert_values_list=insert_values_list,
-            conn=conn
+            connection=connection
         )
     
     def update_assignments(
@@ -152,15 +164,16 @@ class PostgresClient:
         update_values,
         value_index_names,
         value_column_names,
-        conn,
         update_time=None,
+        connection=None
     ):
         if update_time is None:
             update_time = datetime.datetime.now(tz=datetime.timezone.utc)
         assignments = self.fetch_dataframe(
             schema_name=schema_name,
             table_name=table_name,
-            index_column_names=['assignment_id']
+            index_column_names=['assignment_id'],
+            connection=connection
         )
         current_assignments = (
             assignments
@@ -192,17 +205,17 @@ class PostgresClient:
             schema_name=schema_name,
             table_name=table_name,
             assignment_ids=end_assignment_ids,
-            conn=conn,
-            assignment_end=update_time
+            assignment_end=update_time,
+            connection=connection
         )
         self.start_assignments(
             schema_name=schema_name,
             table_name=table_name,
             assignment_start=update_time,
             values=new_assignments,
-            conn=conn,
             value_index_names=value_index_names,
-            value_column_names=value_column_names
+            value_column_names=value_column_names,
+            connection=connection
         )
 
     def start_assignments(
@@ -210,10 +223,10 @@ class PostgresClient:
         schema_name,
         table_name,
         values,
-        conn,
         assignment_start=None,
         value_index_names=None,
-        value_column_names=None
+        value_column_names=None,
+        connection=None
     ):
         if len(values) == 0:
             logger.warning('Values dataframe is empty')
@@ -237,8 +250,8 @@ class PostgresClient:
             dataframe=insert_df,
             schema_name=schema_name,
             table_name=table_name,
-            conn=conn,
-            drop_index=False
+            drop_index=False,
+            connection=connection
         )
 
     def end_assignments(
@@ -246,8 +259,8 @@ class PostgresClient:
         schema_name,
         table_name,
         assignment_ids,
-        conn,
-        assignment_end=None
+        assignment_end=None,
+        connection=None
     ):
         if len(assignment_ids) == 0:
             logger.warning('Assignment ID list is empty')
@@ -264,7 +277,7 @@ class PostgresClient:
             match_values_list=match_values_list,
             update_column_names=update_column_names,
             update_values_list=update_values_list,
-            conn=conn
+            connection=connection
         )
 
     def insert_rows(
@@ -273,7 +286,7 @@ class PostgresClient:
         table_name,
         insert_column_names,
         insert_values_list,
-        conn
+        connection=None
     ):
         sql_object = self.compose_insert_sql(
             schema_name=schema_name,
@@ -285,7 +298,7 @@ class PostgresClient:
         self.executemany(
             sql_object=sql_object,
             parameters_list=parameters_list,
-            conn=conn
+            connection=connection
         )
 
     def insert_row(
@@ -294,8 +307,8 @@ class PostgresClient:
         table_name,
         insert_column_names,
         insert_values,
-        conn,
-        return_column_names=None
+        return_column_names=None,
+        connection=None
     ):
         sql_object = self.compose_insert_sql(
             schema_name=schema_name,
@@ -308,8 +321,8 @@ class PostgresClient:
         data, description = self.execute(
             sql_object=sql_object,
             parameters=parameters,
-            conn=conn,
-            return_data=return_data
+            return_data=return_data,
+            connection=connection
         )
         return data, description
 
@@ -321,7 +334,7 @@ class PostgresClient:
         match_values_list,
         update_column_names,
         update_values_list,
-        conn
+        connection=None
     ):
         sql_object = self.compose_update_sql(
             schema_name=schema_name,
@@ -334,7 +347,7 @@ class PostgresClient:
         self.executemany(
             sql_object=sql_object,
             parameters_list=parameters_list,
-            conn=conn
+            connection=connection
         )
 
     def update_row(
@@ -345,8 +358,8 @@ class PostgresClient:
         match_values,
         update_column_names,
         update_values,
-        conn,
-        return_column_names=None
+        return_column_names=None,
+        connection=None
     ):
         sql_object = self.compose_update_sql(
             schema_name=schema_name,
@@ -360,8 +373,8 @@ class PostgresClient:
         data, description = self.execute(
             sql_object=sql_object,
             parameters=parameters,
-            conn=conn,
-            return_data=return_data
+            return_data=return_data,
+            connection=connection
         )
         return data, description
 
