@@ -47,7 +47,7 @@ def update_tc_data(
         # Create new update in updates table
         if update_start is None:
             update_start = datetime.datetime.now(tz=datetime.timezone.utc)
-        data = pg_client.insert_row(
+        data, description = pg_client.insert_row(
             schema_name='tc',
             table_name='updates',
             insert_column_names=['update_start'],
@@ -191,7 +191,7 @@ def update_tc_data(
         )
         # Record end of update session
         update_end = datetime.datetime.now(tz=datetime.timezone.utc)
-        pg_client.update_row(
+        data, description = pg_client.update_row(
             schema_name='tc',
             table_name='updates',
             match_column_names=['update_id'],

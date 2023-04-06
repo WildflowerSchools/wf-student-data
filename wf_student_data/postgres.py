@@ -64,11 +64,12 @@ class PostgresClient:
         logger.debug(sql_object.as_string(conn))
         with conn.cursor() as cur:
             cur.execute(sql_object, parameters)
+            description = cur.description
             if return_data:
                 data = cur.fetchall()
             else:
                 data = None
-        return data
+        return data, description
 
     def executemany(
         self,
@@ -92,19 +93,22 @@ class PostgresClient:
            table_name,
            schema_name 
         ))
-        sql_object = psycopg2.sql.SQL("SELECT * FROM {schema_name}.{table_name}").format(
-            schema_name=psycopg2.sql.Identifier(schema_name),
-            table_name=psycopg2.sql.Identifier(table_name)
+        sql_object = self.compose_select_sql(
+            schema_name=schema_name,
+            table_name=table_name
         )
         with self.connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql_object)
-                column_names = [descriptor.name for descriptor in cur.description]
-                data_list = cur.fetchall()
+            data, description = self.execute(
+                sql_object=sql_object,
+                parameters=None,
+                conn=conn,
+                return_data=True
+            )
+        column_names = [descriptor.name for descriptor in description]
         # Convert to dataframe
         logger.info('Converting to Pandas dataframe')
         dataframe = pd.DataFrame(
-            data_list,
+            data,
             columns=column_names
         )
         # If index columns are specified, set index of dataframe
@@ -271,7 +275,7 @@ class PostgresClient:
         insert_values_list,
         conn
     ):
-        sql_object = self.compose_insert_row_sql(
+        sql_object = self.compose_insert_sql(
             schema_name=schema_name,
             table_name=table_name,
             insert_column_names=insert_column_names,
@@ -293,7 +297,7 @@ class PostgresClient:
         conn,
         return_column_names=None
     ):
-        sql_object = self.compose_insert_row_sql(
+        sql_object = self.compose_insert_sql(
             schema_name=schema_name,
             table_name=table_name,
             insert_column_names=insert_column_names,
@@ -301,13 +305,13 @@ class PostgresClient:
         )
         parameters = insert_values
         return_data = True if return_column_names is not None else False
-        data = self.execute(
+        data, description = self.execute(
             sql_object=sql_object,
             parameters=parameters,
             conn=conn,
             return_data=return_data
         )
-        return data
+        return data, description
 
     def update_rows(
         self,
@@ -319,7 +323,7 @@ class PostgresClient:
         update_values_list,
         conn
     ):
-        sql_object = self.compose_update_row_sql(
+        sql_object = self.compose_update_sql(
             schema_name=schema_name,
             table_name=table_name,
             match_column_names=match_column_names,
@@ -344,7 +348,7 @@ class PostgresClient:
         conn,
         return_column_names=None
     ):
-        sql_object = self.compose_update_row_sql(
+        sql_object = self.compose_update_sql(
             schema_name=schema_name,
             table_name=table_name,
             match_column_names=match_column_names,
@@ -353,15 +357,26 @@ class PostgresClient:
         )
         parameters = list(update_values) + list(match_values)
         return_data = True if return_column_names is not None else False
-        data = self.execute(
+        data, description = self.execute(
             sql_object=sql_object,
             parameters=parameters,
             conn=conn,
             return_data=return_data
         )
-        return data
+        return data, description
 
-    def compose_insert_row_sql(
+    def compose_select_sql(
+        self,
+        schema_name,
+        table_name
+    ):
+        sql_object = psycopg2.sql.SQL("SELECT * FROM {schema_name}.{table_name}").format(
+            schema_name=psycopg2.sql.Identifier(schema_name),
+            table_name=psycopg2.sql.Identifier(table_name)
+        )
+        return sql_object
+
+    def compose_insert_sql(
         self,
         schema_name,
         table_name,
@@ -383,7 +398,7 @@ class PostgresClient:
             ])
         return sql_object
 
-    def compose_update_row_sql(
+    def compose_update_sql(
         self,
         schema_name,
         table_name,
