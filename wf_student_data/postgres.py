@@ -100,7 +100,6 @@ class PostgresClient:
         index_column_names=None,
         connection=None
     ):
-        ## TODO: Should we add option of using existing connection?
         # Read data from student database
         logger.info('Fetching \'{}\' table from \'{}\' schema'.format(
            table_name,
@@ -141,7 +140,6 @@ class PostgresClient:
         drop_index=False,
         connection=None
     ):
-        ## TODO: Should we add option of *not* using existing connection (create connection within method)?
         dataframe_noindex = dataframe.reset_index(drop=drop_index)
         insert_column_names = dataframe_noindex.columns.tolist()
         insert_values_list = dataframe_noindex.to_dict(orient='tight')['data']
