@@ -54,6 +54,32 @@ class PostgresClient:
         conn = psycopg2.connect(**self.connect_kwargs)
         return conn
 
+    def execute(
+        self,
+        sql_object,
+        parameters,
+        conn,
+        return_data=False
+    ):
+        logger.debug(sql_object.as_string(conn))
+        with conn.cursor() as cur:
+            cur.execute(sql_object, parameters)
+            if return_data:
+                data = cur.fetchall()
+            else:
+                data = None
+        return data
+
+    def executemany(
+        self,
+        sql_object,
+        parameters_list,
+        conn
+    ):
+        logger.debug(sql_object.as_string(conn))
+        with conn.cursor() as cur:
+            cur.executemany(sql_object, parameters_list)
+
     def fetch_dataframe(
         self,
         schema_name,
@@ -386,29 +412,3 @@ class PostgresClient:
                 )
             ])
         return sql_object
-
-    def execute(
-        self,
-        sql_object,
-        parameters,
-        conn,
-        return_data=False
-    ):
-        logger.debug(sql_object.as_string(conn))
-        with conn.cursor() as cur:
-            cur.execute(sql_object, parameters)
-            if return_data:
-                data = cur.fetchall()
-            else:
-                data = None
-        return data
-
-    def executemany(
-        self,
-        sql_object,
-        parameters_list,
-        conn
-    ):
-        logger.debug(sql_object.as_string(conn))
-        with conn.cursor() as cur:
-            cur.executemany(sql_object, parameters_list)
