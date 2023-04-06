@@ -396,13 +396,24 @@ class PostgresClient:
         insert_column_names,
         return_column_names=None
     ):
-        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({insert_column_names}) VALUES ({insert_value_placeholders})").format(
+        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name}").format(
             schema_name=psycopg2.sql.Identifier(schema_name),
-            table_name=psycopg2.sql.Identifier(table_name),
-            insert_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in insert_column_names]),
-            insert_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(insert_column_names))
+            table_name=psycopg2.sql.Identifier(table_name)
         )
-        if return_column_names is not None:
+        if insert_column_names is not None and len(insert_column_names) > 0:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("({insert_column_names}) VALUES ({insert_value_placeholders})").format(
+                    insert_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in insert_column_names]),
+                    insert_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(insert_column_names))
+                )
+            ])
+        else:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                 psycopg2.sql.SQL("DEFAULT VALUES")
+            ])
+        if return_column_names is not None and len (return_column_names) > 0:
             sql_object = psycopg2.sql.SQL(' ').join([
                 sql_object,
                 psycopg2.sql.SQL("RETURNING ({return_column_names})").format(
