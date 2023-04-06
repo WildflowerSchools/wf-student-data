@@ -58,7 +58,7 @@ class PostgresClient:
         self,
         schema_name,
         table_name,
-        index_columns=None
+        index_column_names=None
     ):
         ## TODO: Should we add option of using existing connection?
         # Read data from student database
@@ -83,10 +83,10 @@ class PostgresClient:
         )
         # If index columns are specified, set index of dataframe
         ## TODO: Automate this by inspecting primary key of table?
-        if index_columns is not None:
+        if index_column_names is not None:
             dataframe = (
                 dataframe
-                .set_index(index_columns)
+                .set_index(index_column_names)
                 .sort_index()
             )
         return dataframe
@@ -101,8 +101,8 @@ class PostgresClient:
     ):
         ## TODO: Should we add option of *not* using existing connection (create connection within method)?
         dataframe_noindex = dataframe.reset_index(drop=drop_index)
-        column_names = dataframe_noindex.columns.tolist()
-        column_values_list = dataframe_noindex.to_dict(orient='tight')['data']
+        insert_column_names = dataframe_noindex.columns.tolist()
+        insert_values_list = dataframe_noindex.to_dict(orient='tight')['data']
         logger.info('Inserting data into \'{}\' table in \'{}\' schema'.format(
            table_name,
            schema_name 
@@ -110,8 +110,8 @@ class PostgresClient:
         self.insert_rows(
             schema_name=schema_name,
             table_name=table_name,
-            column_names=column_names,
-            column_values_list=column_values_list,
+            insert_column_names=insert_column_names,
+            insert_values_list=insert_values_list,
             conn=conn
         )
     
@@ -130,7 +130,7 @@ class PostgresClient:
         assignments = self.fetch_dataframe(
             schema_name=schema_name,
             table_name=table_name,
-            index_columns=['assignment_id']
+            index_column_names=['assignment_id']
         )
         current_assignments = (
             assignments
@@ -142,12 +142,16 @@ class PostgresClient:
         current_values=current_assignments.reindex(columns=value_column_names)
         deleted_values = current_values.loc[current_values.index.difference(update_values.index)]
         new_values = update_values.loc[update_values.index.difference(current_values.index)]
-        changed_values = update_values.loc[current_values.index.intersection(update_values.index)].loc[
-            (
-                current_values.loc[current_values.index.intersection(update_values.index)] !=
-                update_values.loc[current_values.index.intersection(update_values.index)]
-            ).apply(np.all, axis=1)
-        ]
+        changed_values = (
+            update_values
+            .loc[current_values.index.intersection(update_values.index)]
+            .loc[
+                (
+                    current_values.loc[current_values.index.intersection(update_values.index)] !=
+                    update_values.loc[current_values.index.intersection(update_values.index)]
+                ).apply(np.all, axis=1)
+            ]
+        )
         end_assignment_ids = (
             current_assignments
             .loc[deleted_values.index.union(changed_values.index)]['assignment_id']
@@ -219,17 +223,17 @@ class PostgresClient:
             logger.warning('Assignment ID list is empty')
         if assignment_end is None:
             assignment_end = datetime.datetime.now(tz=datetime.timezone.utc)
-        index_names = ['assignment_id']
-        index_values_list = [[assignment_id] for assignment_id in assignment_ids]
-        column_names = ['assignment_end']
-        column_values_list=[[assignment_end] for _ in range(len(assignment_ids))]
+        match_column_names = ['assignment_id']
+        match_values_list = [[assignment_id] for assignment_id in assignment_ids]
+        update_column_names = ['assignment_end']
+        update_values_list=[[assignment_end] for _ in range(len(assignment_ids))]
         self.update_rows(
             schema_name=schema_name,
             table_name=table_name,
-            index_names=index_names,
-            index_values_list=index_values_list,
-            column_names=column_names,
-            column_values_list=column_values_list,
+            match_column_names=match_column_names,
+            match_values_list=match_values_list,
+            update_column_names=update_column_names,
+            update_values_list=update_values_list,
             conn=conn
         )
 
@@ -237,19 +241,20 @@ class PostgresClient:
         self,
         schema_name,
         table_name,
-        column_names,
-        column_values_list,
+        insert_column_names,
+        insert_values_list,
         conn
     ):
-        sql_object, parameters = self.compose_insert_rows_sql(
+        sql_object = self.compose_insert_row_sql(
             schema_name=schema_name,
             table_name=table_name,
-            column_names=column_names,
-            column_values_list=column_values_list
+            insert_column_names=insert_column_names,
+            return_column_names=None
         )
+        parameters_list = insert_values_list
         self.executemany(
             sql_object=sql_object,
-            parameters=parameters,
+            parameters_list=parameters_list,
             conn=conn
         )
 
@@ -257,55 +262,48 @@ class PostgresClient:
         self,
         schema_name,
         table_name,
-        column_names,
-        column_values,
+        insert_column_names,
+        insert_values,
         conn,
-        return_names=None
+        return_column_names=None
     ):
-        sql_object, parameters = self.compose_insert_row_sql(
+        sql_object = self.compose_insert_row_sql(
             schema_name=schema_name,
             table_name=table_name,
-            column_names=column_names,
-            column_values=column_values,
-            return_names=return_names
+            insert_column_names=insert_column_names,
+            return_column_names=return_column_names
         )
-        if return_names is not None:
-            data = self.execute(
-                sql_object=sql_object,
-                parameters=parameters,
-                conn=conn,
-                return_data=True
-            )
-            return data
-        else:
-            self.execute(
-                sql_object=sql_object,
-                parameters=parameters,
-                conn=conn,
-                return_data=False
-            )
+        parameters = insert_values
+        return_data = True if return_column_names is not None else False
+        data = self.execute(
+            sql_object=sql_object,
+            parameters=parameters,
+            conn=conn,
+            return_data=return_data
+        )
+        return data
 
     def update_rows(
         self,
         schema_name,
         table_name,
-        index_names,
-        index_values_list,
-        column_names,
-        column_values_list,
+        match_column_names,
+        match_values_list,
+        update_column_names,
+        update_values_list,
         conn
     ):
-        sql_object, parameters = self.compose_update_rows_sql(
+        sql_object = self.compose_update_row_sql(
             schema_name=schema_name,
             table_name=table_name,
-            index_names=index_names,
-            index_values_list=index_values_list,
-            column_names=column_names,
-            column_values_list=column_values_list
+            match_column_names=match_column_names,
+            update_column_names=update_column_names,
+            return_column_names=None
         )
+        parameters_list = [list(update_values) + list(match_values) for update_values, match_values in zip(update_values_list, match_values_list)]
         self.executemany(
             sql_object=sql_object,
-            parameters=parameters,
+            parameters_list=parameters_list,
             conn=conn
         )
 
@@ -313,118 +311,81 @@ class PostgresClient:
         self,
         schema_name,
         table_name,
-        index_names,
-        index_values,
-        column_names,
-        column_values,
-        conn
+        match_column_names,
+        match_values,
+        update_column_names,
+        update_values,
+        conn,
+        return_column_names=None
     ):
-        sql_object, parameters = self.compose_update_row_sql(
+        sql_object = self.compose_update_row_sql(
             schema_name=schema_name,
             table_name=table_name,
-            index_names=index_names,
-            index_values=index_values,
-            column_names=column_names,
-            column_values=column_values
+            match_column_names=match_column_names,
+            update_column_names=update_column_names,
+            return_column_names=return_column_names
         )
-        self.execute(
+        parameters = list(update_values) + list(match_values)
+        return_data = True if return_column_names is not None else False
+        data = self.execute(
             sql_object=sql_object,
             parameters=parameters,
             conn=conn,
-            return_data=False
+            return_data=return_data
         )
-
-    def compose_insert_rows_sql(
-        self,
-        schema_name,
-        table_name,
-        column_names,
-        column_values_list
-    ):
-        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({column_names}) VALUES ({column_value_placeholders})").format(
-            schema_name=psycopg2.sql.Identifier(schema_name),
-            table_name=psycopg2.sql.Identifier(table_name),
-            column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in column_names]),
-            column_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(column_names))
-        )
-        parameters = list(column_values_list)
-        return sql_object, parameters
+        return data
 
     def compose_insert_row_sql(
         self,
         schema_name,
         table_name,
-        column_names,
-        column_values,
-        return_names=None
+        insert_column_names,
+        return_column_names=None
     ):
-        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({column_names}) VALUES ({column_value_placeholders})").format(
+        sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name} ({insert_column_names}) VALUES ({insert_value_placeholders})").format(
             schema_name=psycopg2.sql.Identifier(schema_name),
             table_name=psycopg2.sql.Identifier(table_name),
-            column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in column_names]),
-            column_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(column_names))
+            insert_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(column_name) for column_name in insert_column_names]),
+            insert_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(insert_column_names))
         )
-        if return_names is not None:
+        if return_column_names is not None:
             sql_object = psycopg2.sql.SQL(' ').join([
                 sql_object,
-                psycopg2.sql.SQL("RETURNING ({return_names})").format(
-                    return_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(return_name) for return_name in return_names])
+                psycopg2.sql.SQL("RETURNING ({return_column_names})").format(
+                    return_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(return_name) for return_name in return_column_names])
                 )
             ])
-        parameters = list(column_values)
-        return sql_object, parameters
-
-    def compose_update_rows_sql(
-        self,
-        schema_name,
-        table_name,
-        index_names,
-        index_values_list,
-        column_names,
-        column_values_list
-    ):
-        if len(index_values_list) != len(column_values_list):
-            raise ValueError('Column values list and index values list must be of same length')
-        sql_object = psycopg2.sql.SQL("UPDATE {schema_name}.{table_name} SET {column_specifications} WHERE ({index_names}) = ({index_value_placeholders});").format(
-            schema_name=psycopg2.sql.Identifier(schema_name),
-            table_name=psycopg2.sql.Identifier(table_name),
-            column_specifications=psycopg2.sql.SQL(', ').join([
-                    psycopg2.sql.SQL('{column_name}={column_placeholder}').format(
-                        column_name=psycopg2.sql.Identifier(column_name),
-                        column_placeholder=psycopg2.sql.Placeholder()
-                    )
-                    for column_name in column_names
-            ]),
-            index_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(index_name) for index_name in index_names]),
-            index_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(index_names))
-        )
-        parameters = [list(column_values) + list(index_values) for column_values, index_values in zip(column_values_list, index_values_list)]
-        return sql_object, parameters
+        return sql_object
 
     def compose_update_row_sql(
         self,
         schema_name,
         table_name,
-        index_names,
-        index_values,
-        column_names,
-        column_values
+        match_column_names,
+        update_column_names,
+        return_column_names=None
     ):
-        sql_object = psycopg2.sql.SQL("UPDATE {schema_name}.{table_name} SET {column_specifications} WHERE ({index_names}) = ({index_value_placeholders});").format(
+        sql_object = psycopg2.sql.SQL("UPDATE {schema_name}.{table_name} SET {update_specifications} WHERE ({match_column_names}) = ({match_value_placeholders});").format(
             schema_name=psycopg2.sql.Identifier(schema_name),
             table_name=psycopg2.sql.Identifier(table_name),
-            column_specifications=psycopg2.sql.SQL(', ').join([
-                    psycopg2.sql.SQL('{column_name}={column_placeholder}').format(
-                        column_name=psycopg2.sql.Identifier(column_name),
-                        column_placeholder=psycopg2.sql.Placeholder()
+            update_specifications=psycopg2.sql.SQL(', ').join([
+                    psycopg2.sql.SQL('{update_column_name}={update_value_placeholder}').format(
+                        update_column_name=psycopg2.sql.Identifier(update_column_name),
+                        update_value_placeholder=psycopg2.sql.Placeholder()
                     )
-                    for column_name in column_names
+                    for update_column_name in update_column_names
             ]),
-            index_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(index_name) for index_name in index_names]),
-            index_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(index_values))
+            match_column_names=psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(match_column_name) for match_column_name in match_column_names]),
+            match_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(match_column_names))
         )
-        parameters = list(column_values) + list(index_values)
-        return sql_object, parameters
+        if return_column_names is not None:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("RETURNING ({return_column_names})").format(
+                    return_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(return_column_name) for return_column_name in return_column_names])
+                )
+            ])
+        return sql_object
 
     def execute(
         self,
@@ -438,14 +399,16 @@ class PostgresClient:
             cur.execute(sql_object, parameters)
             if return_data:
                 data = cur.fetchall()
-                return data
+            else:
+                data = None
+        return data
 
     def executemany(
         self,
         sql_object,
-        parameters,
+        parameters_list,
         conn
     ):
         logger.debug(sql_object.as_string(conn))
         with conn.cursor() as cur:
-            cur.executemany(sql_object, parameters)
+            cur.executemany(sql_object, parameters_list)

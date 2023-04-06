@@ -50,10 +50,10 @@ def update_tc_data(
         data = pg_client.insert_row(
             schema_name='tc',
             table_name='updates',
-            column_names=['update_start'],
-            column_values=[update_start],
+            insert_column_names=['update_start'],
+            insert_values=[update_start],
             conn=conn,
-            return_names=['update_id']
+            return_column_names=['update_id']
         )
         update_id = data[0][0]
         logger.info('Update with ID {} starting at {}'.format(
@@ -194,10 +194,10 @@ def update_tc_data(
         pg_client.update_row(
             schema_name='tc',
             table_name='updates',
-            index_names=['update_id'],
-            index_values=[update_id],
-            column_names=['update_end'],
-            column_values=[update_end],
+            match_column_names=['update_id'],
+            match_values=[update_id],
+            update_column_names=['update_end'],
+            update_values=[update_end],
             conn=conn
         )
         logger.info('Update with ID {} ended at {}'.format(
