@@ -155,7 +155,7 @@ class PostgresClient:
             connection=connection
         )
     
-    def update_assignments(
+    def update_records(
         self,
         schema_name,
         table_name,
@@ -167,20 +167,20 @@ class PostgresClient:
     ):
         if update_time is None:
             update_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        assignments = self.fetch_dataframe(
+        records = self.fetch_dataframe(
             schema_name=schema_name,
             table_name=table_name,
-            index_column_names=['assignment_id'],
+            index_column_names=['record_id'],
             connection=connection
         )
-        current_assignments = (
-            assignments
-            .loc[assignments['assignment_end'].isna()]
+        current_records = (
+            records
+            .loc[records['record_end'].isna()]
             .reset_index()
             .set_index(value_index_names)
-            .reindex(columns=['assignment_id'] + value_column_names)
+            .reindex(columns=['record_id'] + value_column_names)
         )
-        current_values=current_assignments.reindex(columns=value_column_names)
+        current_values=current_records.reindex(columns=value_column_names)
         deleted_values = current_values.loc[current_values.index.difference(update_values.index)]
         new_values = update_values.loc[update_values.index.difference(current_values.index)]
         changed_values = (
@@ -193,35 +193,35 @@ class PostgresClient:
                 ).apply(np.all, axis=1)
             ]
         )
-        end_assignment_ids = (
-            current_assignments
-            .loc[deleted_values.index.union(changed_values.index)]['assignment_id']
+        end_record_ids = (
+            current_records
+            .loc[deleted_values.index.union(changed_values.index)]['record_id']
             .tolist()
         )
-        new_assignments = pd.concat([changed_values, new_values])
-        self.end_assignments(
+        new_records = pd.concat([changed_values, new_values])
+        self.end_records(
             schema_name=schema_name,
             table_name=table_name,
-            assignment_ids=end_assignment_ids,
-            assignment_end=update_time,
+            record_ids=end_record_ids,
+            record_end=update_time,
             connection=connection
         )
-        self.start_assignments(
+        self.start_records(
             schema_name=schema_name,
             table_name=table_name,
-            assignment_start=update_time,
-            values=new_assignments,
+            record_start=update_time,
+            values=new_records,
             value_index_names=value_index_names,
             value_column_names=value_column_names,
             connection=connection
         )
 
-    def start_assignments(
+    def start_records(
         self,
         schema_name,
         table_name,
         values,
-        assignment_start=None,
+        record_start=None,
         value_index_names=None,
         value_column_names=None,
         connection=None
@@ -229,8 +229,8 @@ class PostgresClient:
         if len(values) == 0:
             logger.warning('Values dataframe is empty')
             return
-        if assignment_start is None:
-            assignment_start = datetime.datetime.now(tz=datetime.timezone.utc)
+        if record_start is None:
+            record_start = datetime.datetime.now(tz=datetime.timezone.utc)
         values = values.copy()
         if value_index_names is None:
             value_index_names = list(values.index.names)
@@ -242,7 +242,7 @@ class PostgresClient:
             values.columns = value_column_names
         insert_df = (
             values
-            .assign(assignment_start=assignment_start)
+            .assign(record_start=record_start)
         )
         self.insert_dataframe(
             dataframe=insert_df,
@@ -252,22 +252,22 @@ class PostgresClient:
             connection=connection
         )
 
-    def end_assignments(
+    def end_records(
         self,
         schema_name,
         table_name,
-        assignment_ids,
-        assignment_end=None,
+        record_ids,
+        record_end=None,
         connection=None
     ):
-        if len(assignment_ids) == 0:
+        if len(record_ids) == 0:
             logger.warning('Assignment ID list is empty')
-        if assignment_end is None:
-            assignment_end = datetime.datetime.now(tz=datetime.timezone.utc)
-        match_column_names = ['assignment_id']
-        match_values_list = [[assignment_id] for assignment_id in assignment_ids]
-        update_column_names = ['assignment_end']
-        update_values_list=[[assignment_end] for _ in range(len(assignment_ids))]
+        if record_end is None:
+            record_end = datetime.datetime.now(tz=datetime.timezone.utc)
+        match_column_names = ['record_id']
+        match_values_list = [[record_id] for record_id in record_ids]
+        update_column_names = ['record_end']
+        update_values_list=[[record_end] for _ in range(len(record_ids))]
         self.update_rows(
             schema_name=schema_name,
             table_name=table_name,
