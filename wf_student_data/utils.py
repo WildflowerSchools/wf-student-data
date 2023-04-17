@@ -4,6 +4,31 @@ import re
 
 INT_RE = re.compile(r'[0-9]+')
 
+def compare_dataframes(current, updates):
+    if set(current.index.names) != set(updates.index.names):
+        raise ValueError('Index level names in updates don\'t match index level names in current')
+    if set(current.columns.names) != set(updates.columns.names):
+        raise ValueError('Column level names in updates don\'t match column level names in current')
+    if set(current.columns) != set(updates.columns):
+        raise ValueError('Column set in updates doesn\'t match column set in current')
+    deleted_row_indices = current.index.difference(updates.index)
+    new_row_indices = updates.index.difference(current.index)
+    common_row_indices = current.index.intersection(updates.index)
+    common_column_indices = current.columns.intersection(updates.columns)
+    deleted_rows = current.loc[deleted_row_indices, common_column_indices].copy()
+    new_rows = updates.loc[new_row_indices, common_column_indices].copy()
+    current_aligned = current.loc[common_row_indices, common_column_indices]
+    updates_aligned = updates.loc[common_row_indices, common_column_indices]
+    compared = current_aligned.compare(updates_aligned, align_axis=0)
+    if len(compared) > 0:
+        changed_row_indices = common_row_indices.intersection(compared.index.droplevel(1))
+    else:
+        changed_row_indices = common_row_indices.intersection([])
+    changed_rows = updates.loc[changed_row_indices, common_column_indices].copy()
+    unchanged_row_indices = common_row_indices.difference(changed_row_indices)
+    unchanged_rows = updates.loc[unchanged_row_indices, common_column_indices].copy()
+    return new_rows, deleted_rows, changed_rows, unchanged_rows
+
 def to_datetime(object):
     try:
         datetime = pd.to_datetime(object, utc=True).to_pydatetime()

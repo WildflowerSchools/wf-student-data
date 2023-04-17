@@ -55,7 +55,7 @@ def update_tc_data(
             return_column_names=['update_id'],
             connection=connection
         )
-        update_id = data[0][0]
+        update_id = data[0]
         logger.info('Update with ID {} starting at {}'.format(
             update_id,
             update_start.isoformat()

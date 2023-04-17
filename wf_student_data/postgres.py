@@ -1,3 +1,4 @@
+import wf_student_data.utils
 import pandas as pd
 import numpy as np
 import psycopg2
@@ -69,13 +70,13 @@ class PostgresClient:
             cur.execute(sql_object, parameters)
             description = cur.description
             if return_data:
-                data = cur.fetchall()
+                data_list = cur.fetchall()
             else:
-                data = None
+                data_list = None
         if not existing_connection:
             connection.commit()
             connection.close()
-        return data, description
+        return data_list, description
 
     def executemany(
         self,
@@ -105,14 +106,12 @@ class PostgresClient:
            table_name,
            schema_name 
         ))
-        sql_object = self.compose_select_sql(
+        data, description = self.select_rows(
             schema_name=schema_name,
-            table_name=table_name
-        )
-        data, description = self.execute(
-            sql_object=sql_object,
-            parameters=None,
-            return_data=True,
+            table_name=table_name,
+            select_column_names=None,
+            match_column_names=None,
+            match_values_list=None,
             connection=connection
         )
         column_names = [descriptor.name for descriptor in description]
@@ -152,6 +151,7 @@ class PostgresClient:
             table_name=table_name,
             insert_column_names=insert_column_names,
             insert_values_list=insert_values_list,
+            return_column_names=None,
             connection=connection
         )
     
@@ -160,7 +160,7 @@ class PostgresClient:
         schema_name,
         table_name,
         update_values,
-        value_index_names,
+        index_column_names,
         value_column_names,
         update_time=None,
         connection=None
@@ -177,28 +177,22 @@ class PostgresClient:
             records
             .loc[records['record_end'].isna()]
             .reset_index()
-            .set_index(value_index_names)
+            .set_index(index_column_names)
             .reindex(columns=['record_id'] + value_column_names)
         )
         current_values=current_records.reindex(columns=value_column_names)
-        deleted_values = current_values.loc[current_values.index.difference(update_values.index)]
-        new_values = update_values.loc[update_values.index.difference(current_values.index)]
-        changed_values = (
-            update_values
-            .loc[current_values.index.intersection(update_values.index)]
-            .loc[
-                (
-                    current_values.loc[current_values.index.intersection(update_values.index)] !=
-                    update_values.loc[current_values.index.intersection(update_values.index)]
-                ).apply(np.all, axis=1)
-            ]
+        new_rows, deleted_rows, changed_rows, unchanged_rows = wf_student_data.utils.compare_dataframes(
+            current=current_values,
+            updates=update_values
         )
+        new_records = pd.concat([changed_rows, new_rows])
+        end_records_value_indices = changed_rows.index.union(deleted_rows.index)
         end_record_ids = (
             current_records
-            .loc[deleted_values.index.union(changed_values.index)]['record_id']
+            .loc[end_records_value_indices]
+            .record_id
             .tolist()
         )
-        new_records = pd.concat([changed_values, new_values])
         self.end_records(
             schema_name=schema_name,
             table_name=table_name,
@@ -210,9 +204,9 @@ class PostgresClient:
             schema_name=schema_name,
             table_name=table_name,
             record_start=update_time,
-            values=new_records,
-            value_index_names=value_index_names,
+            index_column_names=index_column_names,
             value_column_names=value_column_names,
+            values=new_records,
             connection=connection
         )
 
@@ -221,9 +215,9 @@ class PostgresClient:
         schema_name,
         table_name,
         values,
+        index_column_names,
+        value_column_names,
         record_start=None,
-        value_index_names=None,
-        value_column_names=None,
         connection=None
     ):
         if len(values) == 0:
@@ -231,15 +225,6 @@ class PostgresClient:
             return
         if record_start is None:
             record_start = datetime.datetime.now(tz=datetime.timezone.utc)
-        values = values.copy()
-        if value_index_names is None:
-            value_index_names = list(values.index.names)
-        else:
-            values.index.names = value_index_names
-        if value_column_names is None:
-            value_column_names = values.columns.tolist()
-        else:
-            values.columns = value_column_names
         insert_df = (
             values
             .assign(record_start=record_start)
@@ -262,6 +247,7 @@ class PostgresClient:
     ):
         if len(record_ids) == 0:
             logger.warning('Assignment ID list is empty')
+            return
         if record_end is None:
             record_end = datetime.datetime.now(tz=datetime.timezone.utc)
         match_column_names = ['record_id']
@@ -271,43 +257,158 @@ class PostgresClient:
         self.update_rows(
             schema_name=schema_name,
             table_name=table_name,
-            match_column_names=match_column_names,
-            match_values_list=match_values_list,
             update_column_names=update_column_names,
             update_values_list=update_values_list,
+            match_column_names=match_column_names,
+            match_values_list=match_values_list,
+            return_column_names=None,
             connection=connection
         )
+
+    def select_rows(
+        self,
+        schema_name,
+        table_name,
+        select_column_names=None,
+        match_column_names=None,
+        match_values_list=None,
+        connection=None
+    ):
+        if select_column_names is not None and len(select_column_names) == 0:
+            select_column_names = None
+        if match_column_names is not None and len(match_column_names) == 0:
+            match_column_names = None
+        if match_values_list is not None and len(match_values_list) == 0:
+            match_values_list = None
+        sql_object = self.compose_select_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            select_column_names=select_column_names,
+            match_column_names=match_column_names
+        )
+        if match_values_list is not None:
+            parameters_list = match_values_list
+            return_data = True
+            data_items = list()
+            description_items = list()
+            for parameters in parameters_list:
+                data_list, description = self.execute(
+                    sql_object=sql_object,
+                    parameters=parameters,
+                    return_data=return_data,
+                    connection=connection
+                )
+                data_items.append(data_list[0])
+                description_items.append(description)
+            data = data_items
+            description = description_items[0]
+        else:
+            parameters=None
+            return_data=True
+            data_list, description = self.execute(
+                sql_object=sql_object,
+                parameters=parameters,
+                return_data=return_data,
+                connection=connection
+            )
+            data=data_list
+        return data, description
+
+    def select_row(
+        self,
+        schema_name,
+        table_name,
+        select_column_names=None,
+        match_column_names=None,
+        match_values=None,
+        connection=None
+    ):
+        if select_column_names is not None and len(select_column_names) == 0:
+            select_column_names = None
+        if match_column_names is not None and len(match_column_names) == 0:
+            match_column_names = None
+        if match_values is not None and len(match_values) == 0:
+            match_values = None
+        if match_column_names is None or match_values is None:
+            raise ValueError('Must specify columns and values to match when selecting single row')
+        sql_object = self.compose_select_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            select_column_names=select_column_names,
+            match_column_names=match_column_names
+        )
+        parameters = match_values
+        return_data = True
+        data_list, description = self.execute(
+            sql_object=sql_object,
+            parameters=parameters,
+            return_data=return_data,
+            connection=connection
+        )
+        data = data_list[0]
+        return data, description
 
     def insert_rows(
         self,
         schema_name,
         table_name,
-        insert_column_names,
-        insert_values_list,
+        insert_column_names=None,
+        insert_values_list=None,
+        return_column_names=None,
         connection=None
     ):
+        if insert_column_names is not None and len(insert_column_names) == 0:
+            insert_column_names = None
+        if insert_values_list is not None and len(insert_values_list) == 0:
+            insert_values_list = None
+        if return_column_names is not None and len(return_column_names) == 0:
+            return_column_names = None
         sql_object = self.compose_insert_sql(
             schema_name=schema_name,
             table_name=table_name,
             insert_column_names=insert_column_names,
-            return_column_names=None
+            return_column_names=return_column_names
         )
         parameters_list = insert_values_list
-        self.executemany(
-            sql_object=sql_object,
-            parameters_list=parameters_list,
-            connection=connection
-        )
+        if return_column_names is not None:
+            data_items = list()
+            description_items = list()
+            for parameters in parameters_list:
+                data_list, description = self.execute(
+                    sql_object=sql_object,
+                    parameters=parameters,
+                    return_data=True,
+                    connection=connection
+                )
+                data_items.append(data_list[0])
+                description_items.append(description)
+            data = data_items
+            description = description_items[0]
+        else:
+            self.executemany(
+                sql_object=sql_object,
+                parameters_list=parameters_list,
+                connection=connection
+            )
+            data = None
+            description = None
+        return data, description
 
     def insert_row(
         self,
         schema_name,
         table_name,
-        insert_column_names,
-        insert_values,
+        insert_column_names=None,
+        insert_values=None,
         return_column_names=None,
         connection=None
     ):
+        if insert_column_names is not None and len(insert_column_names) == 0:
+            insert_column_names = None
+        if insert_values is not None and len(insert_values) == 0:
+            insert_values = None
+        if return_column_names is not None and len(return_column_names) == 0:
+            return_column_names = None
         sql_object = self.compose_insert_sql(
             schema_name=schema_name,
             table_name=table_name,
@@ -315,50 +416,39 @@ class PostgresClient:
             return_column_names=return_column_names
         )
         parameters = insert_values
-        return_data = True if return_column_names is not None else False
-        data, description = self.execute(
+        if return_column_names is not None:
+            return_data = True
+        else:
+            return_data = False
+        data_list, description = self.execute(
             sql_object=sql_object,
             parameters=parameters,
             return_data=return_data,
             connection=connection
         )
+        if return_data:
+            data = data_list[0]
+        else:
+            data = None
         return data, description
 
     def update_rows(
         self,
         schema_name,
         table_name,
-        match_column_names,
-        match_values_list,
         update_column_names,
         update_values_list,
-        connection=None
-    ):
-        sql_object = self.compose_update_sql(
-            schema_name=schema_name,
-            table_name=table_name,
-            match_column_names=match_column_names,
-            update_column_names=update_column_names,
-            return_column_names=None
-        )
-        parameters_list = [list(update_values) + list(match_values) for update_values, match_values in zip(update_values_list, match_values_list)]
-        self.executemany(
-            sql_object=sql_object,
-            parameters_list=parameters_list,
-            connection=connection
-        )
-
-    def update_row(
-        self,
-        schema_name,
-        table_name,
-        match_column_names,
-        match_values,
-        update_column_names,
-        update_values,
+        match_column_names=None,
+        match_values_list=None,
         return_column_names=None,
         connection=None
     ):
+        if match_column_names is not None and len(match_column_names) == 0:
+            match_column_names = None
+        if match_values_list is not None and len(match_values_list) == 0:
+            match_values_list = None
+        if return_column_names is not None and len(return_column_names) == 0:
+            return_column_names = None
         sql_object = self.compose_update_sql(
             schema_name=schema_name,
             table_name=table_name,
@@ -366,32 +456,233 @@ class PostgresClient:
             update_column_names=update_column_names,
             return_column_names=return_column_names
         )
-        parameters = list(update_values) + list(match_values)
-        return_data = True if return_column_names is not None else False
-        data, description = self.execute(
+        if match_values_list is None:
+            match_values_list = [[]*len(update_values_list)]
+        if match_values_list is not None:
+            parameters_list = [list(update_values) + list(match_values) for update_values, match_values in zip(update_values_list, match_values_list)]
+        else:
+            parameters_list = update_values_list
+        if return_column_names is not None:
+            return_data = True
+            data_items = list()
+            description_items = list()
+            for parameters in parameters_list:
+                data_list, description = self.execute(
+                    sql_object=sql_object,
+                    parameters=parameters,
+                    return_data=return_data,
+                    connection=connection
+                )
+                data_items.append(data_list[0])
+                description_items.append(description)
+            data = data_items
+            description = description_items[0]
+        else:
+            self.executemany(
+                sql_object=sql_object,
+                parameters_list=parameters_list,
+                connection=connection
+            )
+            data = None
+            description = None
+        return data, description
+
+    def update_row(
+        self,
+        schema_name,
+        table_name,
+        update_column_names,
+        update_values,
+        match_column_names=None,
+        match_values=None,
+        return_column_names=None,
+        connection=None
+    ):
+        if match_column_names is not None and len(match_column_names) == 0:
+            match_column_names = None
+        if match_values is not None and len(match_values) == 0:
+            match_values = None
+        if return_column_names is not None and len(return_column_names) == 0:
+            return_column_names = None
+        if match_column_names is None or match_values is None:
+            raise ValueError('Must specify columns and values to match when updating single row')
+        sql_object = self.compose_update_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            match_column_names=match_column_names,
+            update_column_names=update_column_names,
+            return_column_names=return_column_names
+        )
+        if match_values is not None:
+            parameters = list(update_values) + list(match_values)
+        else:
+            parameters = update_values
+        if return_column_names is not None:
+            return_data = True
+        else:
+            return_data= False
+        data_list, description = self.execute(
             sql_object=sql_object,
             parameters=parameters,
             return_data=return_data,
             connection=connection
         )
+        if return_data:
+            data=data_list[0]
+        else:
+            data = None
+        return data, description
+
+    def delete_rows(
+        self,
+        schema_name,
+        table_name,
+        match_column_names=None,
+        match_values_list=None,
+        return_column_names=None,
+        connection=None
+    ):
+        if match_column_names is not None and len(match_column_names) == 0:
+            match_column_names = None
+        if match_values_list is not None and len(match_values_list) == 0:
+            match_values_list = None
+        if return_column_names is not None and len(return_column_names) == 0:
+            return_column_names = None
+        sql_object = self.compose_delete_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            match_column_names=match_column_names,
+            return_column_names=return_column_names
+        )
+        if match_values_list is not None and return_column_names is not None:
+            parameters_list = match_values_list
+            return_data = True
+            data_items = list()
+            description_items = list()
+            for parameters in parameters_list:
+                data_list, description = self.execute(
+                    sql_object=sql_object,
+                    parameters=parameters,
+                    return_data=return_data,
+                    connection=connection
+                )
+                data_items.append(data_list[0])
+                description_items.append(description)
+            data = data_items
+            description = description_items[0]
+        elif match_values_list is not None and return_column_names is None:
+            parameters_list = match_values_list
+            self.executemany(
+                sql_object=sql_object,
+                parameters_list=parameters_list,
+                connection=connection
+            )
+            data = None
+            description = None
+        elif match_values_list is None and return_column_names is not None:
+            parameters = None
+            return_data=True
+            data_list, description = self.execute(
+                sql_object=sql_object,
+                parameters=parameters,
+                return_data=return_data,
+                connection=connection
+            )
+            data = data_list
+        else:
+            parameters = None
+            return_data = False
+            data_list, description = self.execute(
+                sql_object=sql_object,
+                parameters=parameters,
+                return_data=return_data,
+                connection=connection
+            )
+            data=None
+        return data, description
+
+    def delete_row(
+        self,
+        schema_name,
+        table_name,
+        match_column_names=None,
+        match_values=None,
+        return_column_names=None,
+        connection=None
+    ):
+        if match_column_names is not None and len(match_column_names) == 0:
+            match_column_names = None
+        if match_values is not None and len(match_values) == 0:
+            match_values = None
+        if return_column_names is not None and len(return_column_names) == 0:
+            return_column_names = None
+        if match_column_names is None or match_values is None:
+            raise ValueError('Must specify columns and values to match when deleting single row')
+        sql_object = self.compose_delete_sql(
+            schema_name=schema_name,
+            table_name=table_name,
+            match_column_names=match_column_names,
+            return_column_names=return_column_names
+        )
+        parameters = match_values
+        if return_column_names is not None:
+            return_data = True
+        else:
+            return_data = False
+        data_list, description = self.execute(
+            sql_object=sql_object,
+            parameters=parameters,
+            return_data=return_data,
+            connection=connection
+        )
+        if return_data:
+            data = data_list[0]
+        else:
+            data = None
         return data, description
 
     def compose_select_sql(
         self,
         schema_name,
-        table_name
+        table_name,
+        select_column_names=None,
+        match_column_names=None
     ):
-        sql_object = psycopg2.sql.SQL("SELECT * FROM {schema_name}.{table_name}").format(
-            schema_name=psycopg2.sql.Identifier(schema_name),
-            table_name=psycopg2.sql.Identifier(table_name)
-        )
+        sql_object = psycopg2.sql.SQL("SELECT")
+        if select_column_names is not None and len(select_column_names) > 0:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("{select_column_names}").format(
+                    select_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(select_column_name) for select_column_name in select_column_names]),
+                )
+            ])
+        else:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("*")
+            ])
+        sql_object = psycopg2.sql.SQL(' ').join([
+            sql_object,
+            psycopg2.sql.SQL("FROM {schema_name}.{table_name}").format(
+                schema_name=psycopg2.sql.Identifier(schema_name),
+                table_name=psycopg2.sql.Identifier(table_name)
+            )
+        ])
+        if match_column_names is not None and len (match_column_names) > 0:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("WHERE ({match_column_names}) = ({match_value_placeholders})").format(
+                    match_column_names=psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(match_column_name) for match_column_name in match_column_names]),
+                    match_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(match_column_names))
+                )
+            ])
         return sql_object
 
     def compose_insert_sql(
         self,
         schema_name,
         table_name,
-        insert_column_names,
+        insert_column_names=None,
         return_column_names=None
     ):
         sql_object = psycopg2.sql.SQL("INSERT INTO {schema_name}.{table_name}").format(
@@ -414,7 +705,7 @@ class PostgresClient:
         if return_column_names is not None and len (return_column_names) > 0:
             sql_object = psycopg2.sql.SQL(' ').join([
                 sql_object,
-                psycopg2.sql.SQL("RETURNING ({return_column_names})").format(
+                psycopg2.sql.SQL("RETURNING {return_column_names}").format(
                     return_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(return_name) for return_name in return_column_names])
                 )
             ])
@@ -424,11 +715,11 @@ class PostgresClient:
         self,
         schema_name,
         table_name,
-        match_column_names,
         update_column_names,
+        match_column_names=None,
         return_column_names=None
     ):
-        sql_object = psycopg2.sql.SQL("UPDATE {schema_name}.{table_name} SET {update_specifications} WHERE ({match_column_names}) = ({match_value_placeholders});").format(
+        sql_object = psycopg2.sql.SQL("UPDATE {schema_name}.{table_name} SET {update_specifications}").format(
             schema_name=psycopg2.sql.Identifier(schema_name),
             table_name=psycopg2.sql.Identifier(table_name),
             update_specifications=psycopg2.sql.SQL(', ').join([
@@ -437,15 +728,50 @@ class PostgresClient:
                         update_value_placeholder=psycopg2.sql.Placeholder()
                     )
                     for update_column_name in update_column_names
-            ]),
-            match_column_names=psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(match_column_name) for match_column_name in match_column_names]),
-            match_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(match_column_names))
+            ])
         )
-        if return_column_names is not None:
+        if match_column_names is not None and len (match_column_names) > 0:
             sql_object = psycopg2.sql.SQL(' ').join([
                 sql_object,
-                psycopg2.sql.SQL("RETURNING ({return_column_names})").format(
+                psycopg2.sql.SQL("WHERE ({match_column_names}) = ({match_value_placeholders})").format(
+                    match_column_names=psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(match_column_name) for match_column_name in match_column_names]),
+                    match_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(match_column_names))
+                )
+            ])
+        if return_column_names is not None and len (return_column_names) > 0:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("RETURNING {return_column_names}").format(
                     return_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(return_column_name) for return_column_name in return_column_names])
                 )
             ])
         return sql_object
+    
+    def compose_delete_sql(
+        self,
+        schema_name,
+        table_name,
+        match_column_names=None,
+        return_column_names=None
+    ):
+        sql_object = psycopg2.sql.SQL("DELETE FROM {schema_name}.{table_name}").format(
+            schema_name=psycopg2.sql.Identifier(schema_name),
+            table_name=psycopg2.sql.Identifier(table_name)
+        )
+        if match_column_names is not None and len (match_column_names) > 0:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("WHERE ({match_column_names}) = ({match_value_placeholders})").format(
+                    match_column_names=psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(match_column_name) for match_column_name in match_column_names]),
+                    match_value_placeholders=psycopg2.sql.SQL(', ').join(psycopg2.sql.Placeholder() * len(match_column_names))
+                )
+            ])
+        if return_column_names is not None and len (return_column_names) > 0:
+            sql_object = psycopg2.sql.SQL(' ').join([
+                sql_object,
+                psycopg2.sql.SQL("RETURNING {return_column_names}").format(
+                    return_column_names = psycopg2.sql.SQL(', ').join([psycopg2.sql.Identifier(return_column_name) for return_column_name in return_column_names])
+                )
+            ])
+        return sql_object
+
