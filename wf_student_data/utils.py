@@ -21,7 +21,7 @@ def compare_dataframes(current, updates):
     updates_aligned = updates.loc[common_row_indices, common_column_indices]
     compared = current_aligned.compare(updates_aligned, align_axis=0)
     if len(compared) > 0:
-        changed_row_indices = common_row_indices.intersection(compared.index.droplevel(1))
+        changed_row_indices = common_row_indices.intersection(compared.index.droplevel(-1))
     else:
         changed_row_indices = common_row_indices.intersection([])
     changed_rows = updates.loc[changed_row_indices, common_column_indices].copy()
